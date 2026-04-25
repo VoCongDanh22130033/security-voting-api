@@ -1,0 +1,10 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+jwt:
+  # Secret key phải đủ 32 ký tự cho thuật toán HS256
+  secret: mysecretkey123456789mysecretkey123456789

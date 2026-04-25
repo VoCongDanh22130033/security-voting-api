@@ -1,0 +1,24 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: election-service
+
+  datasource:
+    # 1. Đổi sang giao thức mysql
+    url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password:
+    # 2. Khai báo Driver của MySQL
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      # 'update' sẽ tự động tạo bảng candidates và elections dựa trên Entity nếu DB trống
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        # 3. Sử dụng Dialect cho MySQL 8
+        dialect: org.hibernate.dialect.MySQL8Dialect
