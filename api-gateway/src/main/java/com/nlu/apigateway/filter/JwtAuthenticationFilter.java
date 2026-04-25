@@ -19,7 +19,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
   @Override
   public int getOrder() {
     // Để số thấp để đảm bảo chạy sau các cấu hình hệ thống quan trọng
-    return -1;
+    return 0;
   }
 
   @Override
@@ -32,7 +32,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     // 2. Bỏ qua check JWT cho auth-service
-    if (path.contains("/auth/login") || path.contains("/auth/register")|| path.contains("/api/elections") ){
+    if (path.contains("/auth/login") || path.contains("/auth/register") || path.contains("/api/elections")){
       return chain.filter(exchange);
     }
 

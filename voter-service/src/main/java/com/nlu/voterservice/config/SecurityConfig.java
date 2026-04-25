@@ -13,12 +13,12 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-        .csrf(csrf -> csrf.disable()) // Tắt CSRF vì đây là API stateless
+        .csrf(csrf -> csrf.disable())
         .authorizeHttpRequests(auth -> auth
-            .anyRequest().permitAll() // Cho phép tất cả request đi vào Controller
+            .anyRequest().permitAll()
         )
-        .formLogin(form -> form.disable()) // Tắt giao diện login
-        .httpBasic(basic -> basic.disable()); // Tắt xác thực basic (ngăn lỗi 401 mặc định)
+        .formLogin(form -> form.disable())
+        .httpBasic(basic -> basic.disable());
 
     return http.build();
   }

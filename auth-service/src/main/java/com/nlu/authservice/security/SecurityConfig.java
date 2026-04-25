@@ -17,18 +17,16 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-        // Sử dụng Lambda để disable CSRF
         .csrf(AbstractHttpConfigurer::disable)
-
-        // Cấu hình quyền truy cập bằng Lambda
         .authorizeHttpRequests(auth -> auth
+            // Giữ lại permitAll cho auth để đăng nhập/đăng ký
             .requestMatchers("/auth/**").permitAll()
-            .requestMatchers("/api/elections/**").permitAll()
-            .anyRequest().authenticated()           // Các request khác phải đăng nhập
+            // Tin tưởng Gateway điều phối cho các API còn lại
+            .anyRequest().permitAll()
         )
-
-        // Có thể thêm cấu hình Form Login hoặc HTTP Basic nếu cần
-        .httpBasic(Customizer.withDefaults());
+        // QUAN TRỌNG: Tắt HttpBasic để tránh việc Service tự đòi xác thực riêng
+        .httpBasic(AbstractHttpConfigurer::disable)
+        .formLogin(AbstractHttpConfigurer::disable);
 
     return http.build();
   }

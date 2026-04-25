@@ -1,5 +1,6 @@
 package com.nlu.electionservice.service;
 
+
 import com.nlu.electionservice.entity.Candidate;
 import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.repository.CandidateRepository;

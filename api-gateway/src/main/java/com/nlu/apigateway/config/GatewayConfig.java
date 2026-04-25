@@ -11,8 +11,11 @@ public class GatewayConfig {
     return builder.routes()
         .route("auth-service", r -> r.path("/auth/**").uri("http://localhost:8081"))
         .route("voter-service", r -> r.path("/voter/**").uri("http://localhost:8082"))
-        // Khớp với path /api/ mà Frontend gọi và trỏ về port 8083
-        .route("election-service", r -> r.path("/api/elections/**", "/api/candidates/**")
+        // THÊM ROUTE NÀY CHO VOTE
+        .route("vote-service", r -> r.path("/api/votes/**")
+            .uri("http://localhost:8083"))
+        // Đảm bảo route election-service cũng trỏ về 8083
+        .route("election-service", r -> r.path("/api/elections/**")
             .uri("http://localhost:8083"))
         .build();
   }
