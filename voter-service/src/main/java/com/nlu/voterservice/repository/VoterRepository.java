@@ -7,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface VoterRepository extends JpaRepository<Voter, Long> {
-
-  @Query("SELECT v FROM Voter v JOIN v.user u WHERE u.username = :username")
-  Optional<Voter> findByUsername(@Param("username") String username);
+  @Query("SELECT v FROM Voter v JOIN v.user u WHERE u.email = :email")
+  Optional<Voter> findByEmail(@Param("email") String email);
 }

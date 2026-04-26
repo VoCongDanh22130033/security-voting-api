@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class VoteRequest {
   private Long electionId;
-  private Long candidateId; // Nhận từ: { electionId, candidateId } trong Candidates.tsx
+  private Long candidateId;
   private String encryptedVote;
   private String signature;
 }

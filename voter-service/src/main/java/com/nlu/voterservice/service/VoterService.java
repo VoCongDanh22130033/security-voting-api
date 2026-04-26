@@ -1,6 +1,5 @@
 package com.nlu.voterservice.service;
 
-
 import com.nlu.voterservice.dto.VoterResponse;
 import com.nlu.voterservice.entity.Voter;
 import com.nlu.voterservice.repository.VoterRepository;
@@ -13,15 +12,15 @@ public class VoterService {
   @Autowired
   private VoterRepository voterRepository;
 
-  public VoterResponse getProfile(String username) {
-    Voter voter = voterRepository.findByUsername(username)
-        .orElseThrow(() -> new RuntimeException("Voter không tồn tại"));
+  public VoterResponse getProfile(String email) {
+    Voter voter = voterRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Cử tri không tồn tại với email: " + email));
 
-    // Lấy tên role đầu tiên (ví dụ: ROLE_VOTER) từ Set roles
+    // Lấy tên role đầu tiên từ danh sách roles của User
     String roleName = voter.getUser().getRoles().stream()
         .findFirst()
         .map(role -> role.getName())
-        .orElse("USER");
+        .orElse("ROLE_VOTER");
 
     return new VoterResponse(
         voter.getUser().getUsername(),

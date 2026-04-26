@@ -19,12 +19,9 @@ public class SecurityConfig {
     http
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
-            // Giữ lại permitAll cho auth để đăng nhập/đăng ký
             .requestMatchers("/auth/**").permitAll()
-            // Tin tưởng Gateway điều phối cho các API còn lại
             .anyRequest().permitAll()
         )
-        // QUAN TRỌNG: Tắt HttpBasic để tránh việc Service tự đòi xác thực riêng
         .httpBasic(AbstractHttpConfigurer::disable)
         .formLogin(AbstractHttpConfigurer::disable);
 
