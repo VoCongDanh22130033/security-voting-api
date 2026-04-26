@@ -20,9 +20,9 @@ public class JwtService {
   }
 
   // ✅ Generate token
-  public String generateToken(String username, String role) {
+  public String generateToken(String email, String role) {
     return Jwts.builder()
-        .setSubject(username)
+        .setSubject(email)
         .claim("role", role)
         .setIssuedAt(new Date())
         .setExpiration(new Date(System.currentTimeMillis() + 86400000)) // 1 ngày
@@ -30,8 +30,8 @@ public class JwtService {
         .compact();
   }
 
-  // ✅ Extract username
-  public String extractUsername(String token) {
+
+  public String extractEmail(String token) {
     return extractAllClaims(token).getSubject();
   }
 
@@ -55,8 +55,8 @@ public class JwtService {
   }
 
   // ✅ Validate token
-  public boolean isValidToken(String token, String username) {
-    final String extractedUsername = extractUsername(token);
-    return (extractedUsername.equals(username) && !isTokenExpired(token));
+  public boolean isValidToken(String token, String email) {
+    final String extractedEmail = extractEmail(token);
+    return (extractedEmail.equals(email) && !isTokenExpired(token));
   }
 }

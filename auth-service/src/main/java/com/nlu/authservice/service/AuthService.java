@@ -41,7 +41,7 @@ public class AuthService {
 
   public String login(LoginRequest request) {
 
-    User user = userRepository.findByUsername(request.getUsername())
+    User user = (User) userRepository.findByEmail(request.getEmail())
         .orElseThrow(() -> new RuntimeException("User not found"));
 
     if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
@@ -52,14 +52,9 @@ public class AuthService {
   }
 
   public User loginReturnUser(LoginRequest request) {
+    System.out.println(">>> Đang đăng nhập với email: [" + request.getEmail() + "]");
 
-    User user = userRepository.findByUsername(request.getUsername())
-        .orElseThrow(() -> new RuntimeException("User not found"));
-
-    if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-      throw new RuntimeException("Invalid password");
-    }
-
-    return user;
+    return userRepository.findByEmail(request.getEmail().trim())
+        .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
   }
 }

@@ -22,10 +22,9 @@ import lombok.Setter;
 @Table(name = "users")
 public class User {
 
-  @Id // Chỉ giữ lại 1 cái này
+  @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
-
   private String username;
   private String password;
   private String email;
@@ -34,8 +33,8 @@ public class User {
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",
-      joinColumns = @JoinColumn(name = "user_id"), // Khớp với 1 cột ID duy nhất của User
-      inverseJoinColumns = @JoinColumn(name = "role_id") // Khớp với 1 cột ID duy nhất của Role
+      joinColumns = @JoinColumn(name = "user_id"),
+      inverseJoinColumns = @JoinColumn(name = "role_id")
   )
   private Set<Role> roles;
 

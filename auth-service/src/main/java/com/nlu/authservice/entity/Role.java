@@ -16,7 +16,7 @@ import lombok.Setter;
 @Table(name = "roles")
 public class Role {
 
-  @Id // Sử dụng duy nhất 1 ID này
+  @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 

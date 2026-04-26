@@ -14,9 +14,8 @@ public class VoterController {
   private VoterService voterService;
 
   @GetMapping("/profile")
-  public ResponseEntity<VoterResponse> getProfile(@RequestHeader("X-User") String username) {
-    // Gateway truyền username qua X-User, Service xử lý logic Map DTO
-    VoterResponse response = voterService.getProfile(username);
+  public ResponseEntity<VoterResponse> getProfile(@RequestHeader("X-User") String email) {
+    VoterResponse response = voterService.getProfile(email);
     return ResponseEntity.ok(response);
   }
 }

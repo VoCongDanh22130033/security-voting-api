@@ -1,9 +1,10 @@
 package com.nlu.electionservice.repository;
 
-import com.nlu.electionservice.entity.Vote; // Bạn cần tạo Entity Vote tương ứng table votes
+import com.nlu.electionservice.entity.Vote;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VoteRepository extends JpaRepository<Vote, Long> {
+  // Quản lý thực thể Vote, dùng để save vào bảng 'votes'
 }

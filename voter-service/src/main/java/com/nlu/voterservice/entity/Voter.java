@@ -14,7 +14,7 @@ public class Voter {
   private Long id;
 
   @OneToOne
-  @JoinColumn(name = "user_id") // Khớp với CONSTRAINT `voters_ibfk_1` trong SQL
+  @JoinColumn(name = "user_id")
   private User user;
 
   @Column(name = "full_name")
