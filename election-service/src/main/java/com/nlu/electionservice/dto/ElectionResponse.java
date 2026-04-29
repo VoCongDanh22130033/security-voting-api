@@ -13,5 +13,7 @@ public class ElectionResponse {
   private LocalDateTime startDate;
   private LocalDateTime endDate;
   private Long roleId;
-  private String imageUrl;
+  private String image;
+
+
 }

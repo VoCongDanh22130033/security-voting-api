@@ -36,9 +36,14 @@ public class Election {
   @Column(name = "is_delete")
   private Integer isDelete = 1;
 
-  @Column(name = "image_url")
-  private String imageUrl;
+  // Sử dụng 'image' đồng bộ với logic xử lý
+  @Column(name = "image_url", length = 500)
+  private String image;
 
   public LocalDateTime getStartDate() { return this.startTime; }
   public LocalDateTime getEndDate() { return this.endTime; }
+
+  // Các hàm này giúp đảm bảo mapping chính xác[cite: 11]
+  public String getImage() { return image; }
+  public void setImage(String image) { this.image = image; }
 }
