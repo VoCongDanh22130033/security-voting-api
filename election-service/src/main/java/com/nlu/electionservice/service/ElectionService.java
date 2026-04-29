@@ -24,39 +24,42 @@ public class ElectionService {
     return electionRepository.findAll();
   }
 
-// ElectionService.java
-
   @Transactional
-  public Election createElection(ElectionRequest request) {
-    Election election = new Election();
-    election.setTitle(request.getTitle());
-    election.setDescription(request.getDescription());
-    election.setStartTime(request.getStartTime());
-    election.setEndTime(request.getEndTime());
-    election.setRoleId(request.getRoleId());
-    election.setStatus("UPCOMING");
+  public Election createElection(Election election, List<Candidate> candidates) {
+    // Thiết lập các giá trị mặc định
+    election.setStatus("OPEN");
     election.setIsDelete(1);
-    election.setImageUrl(request.getImageUrl());
+
     Election saved = electionRepository.save(election);
-    saveCandidates(saved, request);
+
+    // Lưu danh sách ứng viên nếu có[cite: 10]
+    if (candidates != null && !candidates.isEmpty()) {
+      candidates.forEach(c -> c.setElection(saved));
+      candidateRepository.saveAll(candidates);
+    }
     return saved;
   }
 
   @Transactional
   public Election updateElection(Long id, ElectionRequest request) {
     Election election = electionRepository.findById(id)
-        .orElseThrow(() -> new RuntimeException("Không tìm thấy"));
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử"));
+
     election.setTitle(request.getTitle());
     election.setDescription(request.getDescription());
     election.setStartTime(request.getStartTime());
     election.setEndTime(request.getEndTime());
     election.setRoleId(request.getRoleId());
-    election.setImageUrl(request.getImageUrl());
+
+    // Sử dụng setImage đồng bộ[cite: 10, 11]
+    election.setImage(request.getImageUrl());
+
+    // Cập nhật lại ứng viên[cite: 10]
     candidateRepository.deleteByElectionId(id);
     saveCandidates(election, request);
+
     return electionRepository.save(election);
   }
-
 
 
   @Transactional

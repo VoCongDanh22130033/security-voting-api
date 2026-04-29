@@ -4,7 +4,10 @@ server:
 spring:
   application:
     name: election-service
-
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     # 1. Đổi sang giao thức mysql
     url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
@@ -22,3 +25,8 @@ spring:
       hibernate:
         # 3. Sử dụng Dialect cho MySQL 8
         dialect: org.hibernate.dialect.MySQL8Dialect
+
+cloudinary:
+  cloud-name: dzi4yzwjk
+  api-key: 571788156588531
+  api-secret: xIxbTMdaX0Pc4RzE3kAgC2kDjMk
