@@ -5,6 +5,6 @@ import lombok.Data;
 public class VoteRequest {
   private Long electionId;
   private Long candidateId;
-  private String encryptedVote;
+  private String blindedContent;
   private String signature;
 }

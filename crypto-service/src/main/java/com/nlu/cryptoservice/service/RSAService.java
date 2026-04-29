@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.util.Base64;
+import java.util.Map;
 
 @Service
 public class RSAService {
@@ -22,24 +22,32 @@ public class RSAService {
 
   @PostConstruct
   public void init() {
-    // Sinh cặp khóa RSA 2048-bit[cite: 12]
+    // 1. Sinh cặp khóa RSA 2048-bit
     RSAKeyPairGenerator generator = new RSAKeyPairGenerator();
     generator.init(new RSAKeyGenerationParameters(new BigInteger("65537"), new SecureRandom(), 2048, 80));
     this.keyPair = generator.generateKeyPair();
 
-    // Lấy thông số khóa[cite: 12]
     RSAKeyParameters pub = (RSAKeyParameters) keyPair.getPublic();
     RSAKeyParameters priv = (RSAKeyParameters) keyPair.getPrivate();
 
-    // LƯU VÀO CSDL: Để bảng crypto_keys không còn trống[cite: 12]
+    // 2. Lưu khóa vào DB dưới dạng Hex để dễ dàng truy vấn hoặc debug[cite: 11]
     CryptoKey keyEntity = new CryptoKey();
-    keyEntity.setPublicKey(Base64.getEncoder().encodeToString(pub.getModulus().toByteArray()));
-    keyEntity.setPrivateKey(Base64.getEncoder().encodeToString(priv.getExponent().toByteArray()));
-
-    System.out.println(">>> [Crypto] Đang lưu khóa RSA mới vào Database...");
+    keyEntity.setPublicKey(pub.getModulus().toString(16));
+    keyEntity.setPrivateKey(priv.getExponent().toString(16));
     cryptoKeyRepository.save(keyEntity);
+    System.out.println(">>> [Crypto] Khởi tạo và lưu khóa RSA thành công.");
   }
 
+  // 3. Trả về thông số cho Frontend làm mù phiếu[cite: 11, 14]
+  public Map<String, String> getPublicKeyParams() {
+    RSAKeyParameters pub = (RSAKeyParameters) keyPair.getPublic();
+    return Map.of(
+        "modulus", pub.getModulus().toString(16),
+        "exponent", pub.getExponent().toString(16) // Sử dụng getExponent() cho RSAKeyParameters[cite: 11]
+    );
+  }
+
+  // Các phương thức getter hỗ trợ cho các service nội bộ[cite: 11]
   public RSAKeyParameters getPublicKey() { return (RSAKeyParameters) keyPair.getPublic(); }
   public RSAKeyParameters getPrivateKey() { return (RSAKeyParameters) keyPair.getPrivate(); }
 }

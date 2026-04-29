@@ -69,10 +69,10 @@ public class ElectionController {
       return ResponseEntity.internalServerError().body("Lỗi hệ thống: " + e.getMessage());
     }
   }
-  @GetMapping("/{id}/candidates")
-  public ResponseEntity<List<Candidate>> getCandidates(@PathVariable Long id) {
-    return ResponseEntity.ok(electionService.getCandidatesByElection(id));
-  }
+//  @GetMapping("/{id}/candidates")
+//  public ResponseEntity<List<Candidate>> getCandidates(@PathVariable Long id) {
+//    return ResponseEntity.ok(electionService.getCandidatesByElection(id));
+//  }
 
 
   @PutMapping("/{id}")

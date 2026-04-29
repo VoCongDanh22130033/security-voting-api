@@ -16,7 +16,10 @@ public class Vote {
   private Long electionId;
 
   @Column(name = "encrypted_vote", columnDefinition = "TEXT")
-  private String encryptedVote;
+  private String blindedContent;
+
+//  @Column(name = "encrypted_vote", columnDefinition = "TEXT")
+//  private String encryptedVote;
 
   @Column(name = "signature", columnDefinition = "TEXT")
   private String signature;

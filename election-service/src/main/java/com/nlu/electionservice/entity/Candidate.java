@@ -30,6 +30,5 @@ public class Candidate {
   @JoinColumn(name = "election_id")
   @JsonIgnore
   private Election election;
-  @Column(name = "vote_count", columnDefinition = "INT DEFAULT 0")
-  private Integer voteCount = 0;
+
 }
