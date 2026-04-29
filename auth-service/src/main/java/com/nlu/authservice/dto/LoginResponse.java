@@ -1,12 +1,18 @@
 package com.nlu.authservice.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.util.Set;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class LoginResponse {
   private String token;
+  private String username;
+  private String email;
+  private Set<String> roles;
+  private Long id;
 
-  public LoginResponse(String token) {
-    this.token = token;
-  }
 }

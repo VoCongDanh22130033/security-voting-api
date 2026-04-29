@@ -4,9 +4,6 @@ import lombok.Data;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-
-@Setter
-@Getter
 @Data
 public class ElectionResponse {
   private Long id;
@@ -15,4 +12,6 @@ public class ElectionResponse {
   private String status;
   private LocalDateTime startDate;
   private LocalDateTime endDate;
+  private Long roleId;
+  private String imageUrl;
 }

@@ -1,6 +1,5 @@
 package com.nlu.authservice.controller;
 
-
 import com.nlu.authservice.dto.LoginRequest;
 import com.nlu.authservice.dto.LoginResponse;
 import com.nlu.authservice.dto.RegisterRequest;
@@ -31,12 +30,11 @@ public class AuthController {
   @PostMapping("/login")
   public LoginResponse login(@RequestBody LoginRequest request) {
     User user = authService.loginReturnUser(request);
-
     String token = jwtService.generateToken(
         user.getEmail(),
         user.getRoles().toString()
     );
 
-    return new LoginResponse(token);
+    return authService.loginWithDetails(request, token);
   }
 }

@@ -11,5 +11,5 @@ public class CandidateResponse {
   private Long id;
   private String name;
   private String description;
-  private Long electionId; // Chỉ trả về ID thay vì cả Object Election
+  private Long electionId;
 }

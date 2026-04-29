@@ -9,19 +9,16 @@ import java.util.Arrays;
 
 @Configuration
 public class CorsConfig {
-
   @Bean
   public CorsWebFilter corsWebFilter() {
-    CorsConfiguration corsConfig = new CorsConfiguration();
-    // Cho phép Origin từ React (Vite)
-    corsConfig.setAllowedOriginPatterns(Arrays.asList("http://localhost:5173"));
-    corsConfig.setMaxAge(3600L);
-    corsConfig.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-    corsConfig.setAllowedHeaders(Arrays.asList("*"));
-    corsConfig.setAllowCredentials(true);
+    CorsConfiguration config = new CorsConfiguration();
+    config.setAllowCredentials(true);
+    config.setAllowedOrigins(Arrays.asList("http://localhost:5173")); // URL chính xác của Vite
+    config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-User-Email")); // Cho phép header email
+    config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    source.registerCorsConfiguration("/**", corsConfig);
+    source.registerCorsConfiguration("/**", config);
 
     return new CorsWebFilter(source);
   }

@@ -1,0 +1,26 @@
+package com.nlu.electionservice.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "anonymous_votes")
+@Data
+public class AnonymousVote {
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
+
+  @Column(name = "election_id")
+  private Long electionId;
+
+  @Column(name = "blinded_content", columnDefinition = "TEXT")
+  private String blindedContent;
+
+  @Column(name = "signature", columnDefinition = "TEXT")
+  private String signature;
+
+  @Column(name = "created_at", insertable = false, updatable = false)
+  private LocalDateTime createdAt;
+}

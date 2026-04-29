@@ -8,8 +8,6 @@ import lombok.NoArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
-@Setter
-@Getter
 @Entity
 @Table(name = "candidates")
 @Data
@@ -27,9 +25,11 @@ public class Candidate {
   @Column(columnDefinition = "TEXT")
   private String description;
 
-  // Khóa ngoại liên kết tới bảng elections
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "election_id")
-  @JsonIgnore // Tránh vòng lặp vô tận khi chuyển sang JSON
+  @JsonIgnore
   private Election election;
+  @Column(name = "vote_count", columnDefinition = "INT DEFAULT 0")
+  private Integer voteCount = 0;
 }

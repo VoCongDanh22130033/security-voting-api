@@ -28,4 +28,10 @@ public class VoterService {
         roleName
     );
   }
+
+  public Voter findByEmail(String email) {
+    return voterRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy cử tri với email: " + email));
+  }
+
 }

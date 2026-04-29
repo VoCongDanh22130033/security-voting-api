@@ -11,4 +11,6 @@ import java.util.List;
 public interface CandidateRepository extends JpaRepository<Candidate, Long> {
   // Tìm danh sách ứng viên dựa trên ID cuộc bầu cử
   List<Candidate> findByElectionId(Long electionId);
+
+  void deleteByElectionId(Long electionId);
 }

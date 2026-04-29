@@ -1,5 +1,4 @@
 package com.nlu.electionservice.dto;
-
 import lombok.Data;
 
 @Data
