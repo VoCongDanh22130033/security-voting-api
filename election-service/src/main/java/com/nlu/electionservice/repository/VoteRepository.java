@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface VoteRepository extends JpaRepository<Vote, Long> {
-  // Quản lý thực thể Vote, dùng để save vào bảng 'votes'
+
 }
