@@ -29,7 +29,7 @@ public class User {
   private String password;
   private String email;
   private String phone;
-
+  private String image_url;
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",

@@ -14,5 +14,6 @@ public class LoginResponse {
   private String email;
   private Set<String> roles;
   private Long id;
+  private String image_url;
 
 }

@@ -33,9 +33,9 @@ public class CandidateService {
       dto.setId(((Number) row[0]).longValue());
       dto.setName((String) row[1]);
       dto.setDescription((String) row[2]);
-
+      dto.setImageUrl((String) row[3]);
       // Log giá trị đếm được để kiểm tra
-      long votes = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+      long votes = row[4] != null ? ((Number) row[4]).longValue() : 0L;
       log.info(">>> [BE] Ứng viên: {} - Số phiếu đếm được: {}", row[1], votes);
 
       dto.setVoteCount(votes);
