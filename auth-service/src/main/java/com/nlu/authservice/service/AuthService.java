@@ -74,6 +74,7 @@ public class AuthService {
         .map(Role::getName)
         .collect(java.util.stream.Collectors.toSet());
 
-    return new LoginResponse(token, user.getUsername(), user.getEmail(), roles ,user.getId());
+    return new LoginResponse(token, user.getUsername(), user.getEmail(), roles ,user.getId(),
+        user.getImage_url());
   }
 }

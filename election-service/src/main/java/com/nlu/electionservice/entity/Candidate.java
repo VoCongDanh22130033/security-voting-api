@@ -25,6 +25,8 @@ public class Candidate {
   @Column(columnDefinition = "TEXT")
   private String description;
 
+  @Column(name = "image_url")
+  private String imageUrl;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "election_id")

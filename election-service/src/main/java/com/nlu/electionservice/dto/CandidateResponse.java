@@ -13,4 +13,6 @@ public class CandidateResponse {
   private String description;
   private Long electionId;
   private long voteCount;
+  private String imageUrl;
+
 }
