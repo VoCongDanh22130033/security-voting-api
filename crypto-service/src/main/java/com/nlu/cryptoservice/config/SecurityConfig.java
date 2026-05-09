@@ -16,15 +16,15 @@ public class SecurityConfig {
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
     http
-        .csrf(AbstractHttpConfigurer::disable) // Tắt CSRF để cho phép gọi API từ FE[cite: 13]
+        .csrf(AbstractHttpConfigurer::disable)
         // QUAN TRỌNG: Tắt Session để không còn xuất hiện jsessionid
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/crypto/**").permitAll() // Mở cửa hoàn toàn cho các API ký mù[cite: 13]
+            .requestMatchers("/api/crypto/**").permitAll()
             .anyRequest().permitAll()
         )
         .httpBasic(AbstractHttpConfigurer::disable)
-        .formLogin(AbstractHttpConfigurer::disable); // Tắt form login mặc định để không bị redirect[cite: 13, 14]
+        .formLogin(AbstractHttpConfigurer::disable);
 
     return http.build();
   }

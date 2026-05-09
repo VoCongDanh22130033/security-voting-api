@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class VoterResponse {
-  private String username;
   private String email;
   private String role;
 }

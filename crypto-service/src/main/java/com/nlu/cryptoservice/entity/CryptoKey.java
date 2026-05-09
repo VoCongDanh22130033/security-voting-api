@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 @Data
 public class CryptoKey {
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+  @Column(name = "election_id")
+  private Long electionId;
 
   @Column(name = "public_key", columnDefinition = "TEXT")
   private String publicKey;
