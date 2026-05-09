@@ -23,7 +23,6 @@ public class VoterService {
         .orElse("ROLE_VOTER");
 
     return new VoterResponse(
-        voter.getUser().getUsername(),
         voter.getUser().getEmail(),
         roleName
     );

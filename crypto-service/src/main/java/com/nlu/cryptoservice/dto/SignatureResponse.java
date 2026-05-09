@@ -7,5 +7,5 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class SignatureResponse {
-  private String signature; // Base64 chữ ký mù của Server
+  private String signature;
 }

@@ -13,13 +13,11 @@ public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
-
-  private String username;
   private String email;
   private String password;
   private String phone;
+  private String image_url;
 
-  // Quan hệ với bảng roles thông qua bảng trung gian user_roles trong SQL của bạn
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",

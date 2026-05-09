@@ -6,22 +6,22 @@ import lombok.*;
 @Entity
 @Table(name = "voters")
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class Voter {
+
   @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+  @Column(name = "user_id")
+  private Long userId;
 
   @OneToOne
+  @MapsId
   @JoinColumn(name = "user_id")
   private User user;
 
-  @Column(name = "full_name")
-  private String fullName;
-
   @Column(name = "citizen_id")
   private String citizenId;
+
+  @Column(name = "full_name")
+  private String fullName;
 
   @Column(name = "is_verified")
   private boolean isVerified;
