@@ -40,7 +40,7 @@ public class Election {
   private Integer isDelete = 1;
 
   @Column(name = "image_url", length = 500)
-  private String image;
+  private String imageUrl;
 
   @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<Candidate> candidates = new ArrayList<>();

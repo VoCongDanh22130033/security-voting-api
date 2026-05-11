@@ -28,15 +28,51 @@ public class ElectionController {
   private ElectionRepository electionRepository;
   private final ObjectMapper mapper = new ObjectMapper()
       .registerModule(new JavaTimeModule());
+
+
   @PostMapping("/upload-image")
   public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
     String url = cloudinaryService.uploadFile(file);
     return ResponseEntity.ok(java.util.Map.of("url", url));
   }
+
+//  public ResponseEntity<List<ElectionResponse>> getAll() {
+//    List<Election> elections = electionService.getAllElections();
+//
+//    List<ElectionResponse> response = elections.stream().map(e -> {
+//      ElectionResponse dto = new ElectionResponse();
+//      dto.setId(e.getId());
+//      dto.setTitle(e.getTitle());
+//      dto.setDescription(e.getDescription());
+//      dto.setStatus(e.getStatus());
+//      dto.setStartDate(e.getStartTime());
+//      dto.setEndDate(e.getEndTime());
+//      dto.setImage(e.getImage());
+//      dto.setRoleId(e.getRoleId());
+//
+//      if(e.getCandidates() != null) {
+//        dto.setCandidates(e.getCandidates().stream().map(c ->
+//            CandidateResponse.builder()
+//                .id(c.getId())
+//                .name(c.getName())
+//                .imageUrl(c.getImageUrl())
+//                .description(c.getDescription())
+//                .build()
+//        ).collect(Collectors.toList()));
+//      }
+//      return dto;
+//    }).collect(Collectors.toList());
+//
+//    return ResponseEntity.ok(response);
+//  }
   @GetMapping
   public ResponseEntity<List<ElectionResponse>> getAll() {
-    List<Election> elections = electionService.getAllElections();
-    List<ElectionResponse> response = elections.stream().map(e -> {
+    // 1. Lấy danh sách trực tiếp từ repository và sắp xếp ID giảm dần (mới nhất lên đầu)
+    List<Election> list = electionRepository.findAll(org.springframework.data.domain.Sort.by(
+        org.springframework.data.domain.Sort.Direction.DESC, "id"));
+
+    // 2. Map từ danh sách 'list' (đã sắp xếp) sang 'ElectionResponse'
+    List<ElectionResponse> response = list.stream().map(e -> {
       ElectionResponse dto = new ElectionResponse();
       dto.setId(e.getId());
       dto.setTitle(e.getTitle());
@@ -44,10 +80,10 @@ public class ElectionController {
       dto.setStatus(e.getStatus());
       dto.setStartDate(e.getStartTime());
       dto.setEndDate(e.getEndTime());
-      dto.setImage(e.getImage());
+      dto.setImage(e.getImageUrl());
       dto.setRoleId(e.getRoleId());
 
-      if(e.getCandidates() != null) {
+      if (e.getCandidates() != null) {
         dto.setCandidates(e.getCandidates().stream().map(c ->
             CandidateResponse.builder()
                 .id(c.getId())
@@ -70,7 +106,7 @@ public class ElectionController {
 
       if (file != null && !file.isEmpty()) {
         String imageUrl = cloudinaryService.uploadFile(file);
-        election.setImage(imageUrl);
+        election.setImageUrl(imageUrl);
       }
 
       if (election.getStatus() == null) election.setStatus("OPEN");
@@ -119,6 +155,7 @@ public class ElectionController {
     }
 
     Election saved = electionRepository.save(election);
+    System.out.println("Link ảnh nhận được: " + election.getImageUrl());
     return ResponseEntity.ok(saved);
   }
   @GetMapping("/{id}")
@@ -132,7 +169,7 @@ public class ElectionController {
     dto.setStartDate(e.getStartTime());
     dto.setEndDate(e.getEndTime());
     dto.setRoleId(e.getRoleId());
-    dto.setImage(e.getImage());
+    dto.setImage(e.getImageUrl());
 
     if (e.getCandidates() != null) {
       dto.setCandidates(e.getCandidates().stream().map(c ->
