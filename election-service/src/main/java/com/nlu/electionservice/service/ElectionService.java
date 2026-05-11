@@ -49,7 +49,7 @@ public class ElectionService {
     election.setDescription(request.getDescription());
     election.setStartTime(request.getStartTime());
     election.setEndTime(request.getEndTime());
-    election.setImage(request.getImageUrl());
+    election.setImageUrl(request.getImageUrl());
     election.setStatus(request.getStatus());
 
     election.getCandidates().clear();

@@ -16,4 +16,5 @@ public interface ElectionRepository extends JpaRepository<Election, Long> {
   List<Election> findAllByStatusAndEndTimeBefore(String status, LocalDateTime now);
   // bắt đầu bầu cử
   List<Election> findAllByStatusAndStartTimeBefore(String upcoming, LocalDateTime now);
+  List<Election> findAllByOrderByIdDesc();
 }
