@@ -5,8 +5,6 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
 
 @Entity
 @Table(name = "candidates")
@@ -14,12 +12,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Candidate {
-
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @Column(nullable = false)
   private String name;
 
   @Column(columnDefinition = "TEXT")
@@ -32,5 +28,4 @@ public class Candidate {
   @JoinColumn(name = "election_id")
   @JsonIgnore
   private Election election;
-
 }

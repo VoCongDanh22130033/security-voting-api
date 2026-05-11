@@ -15,7 +15,6 @@ public class JwtFilter implements Filter {
     System.out.println("DEBUG - Voter-Service nhận X-User: " + user); // Thêm dòng này
 
     if (user == null) {
-      // Đừng throw exception thô, hãy trả về mã lỗi 401
       ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing identity");
       return;
     }

@@ -8,6 +8,7 @@ public class CandidateRequest {
   private String name;
   private String description;
   private Long electionId;
-  private long voteCount;
+  private String imageUrl;
+
 
 }

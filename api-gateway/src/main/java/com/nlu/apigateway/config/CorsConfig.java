@@ -13,8 +13,8 @@ public class CorsConfig {
   public CorsWebFilter corsWebFilter() {
     CorsConfiguration config = new CorsConfiguration();
     config.setAllowCredentials(true);
-    config.setAllowedOrigins(Arrays.asList("http://localhost:5173")); // URL chính xác của Vite
-    config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-User-Email")); // Cho phép header email
+    config.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
+    config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-User-Email"));
     config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

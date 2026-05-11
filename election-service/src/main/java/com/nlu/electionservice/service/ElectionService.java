@@ -1,5 +1,6 @@
 package com.nlu.electionservice.service;
 
+import com.nlu.electionservice.dto.CandidateRequest;
 import com.nlu.electionservice.dto.ElectionRequest;
 import com.nlu.electionservice.entity.Candidate;
 import com.nlu.electionservice.entity.Election;
@@ -26,13 +27,11 @@ public class ElectionService {
 
   @Transactional
   public Election createElection(Election election, List<Candidate> candidates) {
-    // Thiết lập các giá trị mặc định
     election.setStatus("OPEN");
     election.setIsDelete(1);
 
     Election saved = electionRepository.save(election);
 
-    // Lưu danh sách ứng viên nếu có[cite: 10]
     if (candidates != null && !candidates.isEmpty()) {
       candidates.forEach(c -> c.setElection(saved));
       candidateRepository.saveAll(candidates);
@@ -49,18 +48,24 @@ public class ElectionService {
     election.setDescription(request.getDescription());
     election.setStartTime(request.getStartTime());
     election.setEndTime(request.getEndTime());
-    election.setRoleId(request.getRoleId());
-
-    // Sử dụng setImage đồng bộ[cite: 10, 11]
     election.setImage(request.getImageUrl());
+    election.setStatus(request.getStatus());
 
-    // Cập nhật lại ứng viên[cite: 10]
-    candidateRepository.deleteByElectionId(id);
-    saveCandidates(election, request);
+    election.getCandidates().clear();
+
+    if (request.getCandidates() != null) {
+      request.getCandidates().forEach(cReq -> {
+        Candidate candidate = new Candidate();
+        candidate.setName(cReq.getName());
+        candidate.setDescription(cReq.getDescription());
+        candidate.setImageUrl(cReq.getImageUrl());
+        candidate.setElection(election);
+        election.getCandidates().add(candidate);
+      });
+    }
 
     return electionRepository.save(election);
   }
-
 
   @Transactional
   public void deleteElection(Long id) {
@@ -75,6 +80,7 @@ public class ElectionService {
         Candidate c = new Candidate();
         c.setName(cReq.getName());
         c.setDescription(cReq.getDescription());
+        c.setImageUrl(cReq.getImageUrl());
         c.setElection(election);
         return c;
       }).collect(Collectors.toList());

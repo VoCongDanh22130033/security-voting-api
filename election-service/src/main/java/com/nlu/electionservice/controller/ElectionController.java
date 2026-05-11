@@ -1,8 +1,9 @@
 package com.nlu.electionservice.controller;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.nlu.electionservice.dto.CandidateResponse;
 import com.nlu.electionservice.dto.ElectionRequest;
 import com.nlu.electionservice.dto.ElectionResponse;
-import com.nlu.electionservice.entity.Candidate;
 import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.service.ElectionService;
@@ -10,7 +11,6 @@ import com.nlu.electionservice.service.CloudinaryService;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,51 +25,70 @@ public class ElectionController {
   private ElectionService electionService;
   @Autowired
   private ElectionRepository electionRepository;
-
+  private final ObjectMapper mapper = new ObjectMapper()
+      .registerModule(new JavaTimeModule());
+  @PostMapping("/upload-image")
+  public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
+    String url = cloudinaryService.uploadFile(file);
+    return ResponseEntity.ok(java.util.Map.of("url", url));
+  }
   @GetMapping
   public ResponseEntity<List<ElectionResponse>> getAll() {
     List<Election> elections = electionService.getAllElections();
-
     List<ElectionResponse> response = elections.stream().map(e -> {
       ElectionResponse dto = new ElectionResponse();
       dto.setId(e.getId());
       dto.setTitle(e.getTitle());
       dto.setDescription(e.getDescription());
       dto.setStatus(e.getStatus());
-      dto.setStartDate(e.getStartDate());
-      dto.setEndDate(e.getEndDate());
-
+      dto.setStartDate(e.getStartTime());
+      dto.setEndDate(e.getEndTime());
       dto.setImage(e.getImage());
       dto.setRoleId(e.getRoleId());
+
+      if(e.getCandidates() != null) {
+        dto.setCandidates(e.getCandidates().stream().map(c ->
+            CandidateResponse.builder()
+                .id(c.getId())
+                .name(c.getName())
+                .imageUrl(c.getImageUrl())
+                .description(c.getDescription())
+                .build()
+        ).collect(Collectors.toList()));
+      }
       return dto;
     }).collect(Collectors.toList());
 
     return ResponseEntity.ok(response);
   }
-
-  @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public ResponseEntity<?> createElection(
-      @RequestPart("election") Election election,
-      @RequestPart("file") MultipartFile file) {
-
+  @PostMapping("/create")
+  public ResponseEntity<?> create(@RequestPart("election") String electionJson,
+      @RequestPart(value = "file", required = false) MultipartFile file) {
     try {
-      // 1. Upload ảnh lên Cloudinary lấy URL
-      String imageUrl = cloudinaryService.uploadFile(file);
+      Election election = mapper.readValue(electionJson, Election.class);
 
-      // 2. Gán URL vào Entity qua hàm setImage đã đồng bộ
-      election.setImage(imageUrl);
+      if (file != null && !file.isEmpty()) {
+        String imageUrl = cloudinaryService.uploadFile(file);
+        election.setImage(imageUrl);
+      }
 
-      // 3. Gọi Service để xử lý lưu Election và Candidate tập trung[cite: 10]
-      // Lưu ý: Đảm bảo class Election của bạn có chứa List<Candidate> nếu muốn lưu đồng thời
-      Election savedElection = electionService.createElection(election, null);
+      if (election.getStatus() == null) election.setStatus("OPEN");
 
-      return ResponseEntity.ok(savedElection);
+      if (election.getCandidates() != null) {
+        election.getCandidates().forEach(c -> c.setElection(election));
+      }
+
+      Election saved = electionService.createElection(election, election.getCandidates());
+      return ResponseEntity.ok(saved);
     } catch (Exception e) {
-      e.printStackTrace();
-      return ResponseEntity.internalServerError().body("Lỗi hệ thống: " + e.getMessage());
+      return ResponseEntity.internalServerError().body("Lỗi: " + e.getMessage());
     }
   }
-
+  @PostMapping("/upload-single")
+  public ResponseEntity<?> uploadSingleFile(@RequestParam("file") MultipartFile file) {
+    String url = cloudinaryService.uploadFile(file);
+    return ResponseEntity.ok(java.util.Map.of("url", url));
+  }
 
   @PutMapping("/{id}")
   public ResponseEntity<Election> update(@PathVariable Long id, @RequestBody ElectionRequest request) {
@@ -81,22 +100,44 @@ public class ElectionController {
     electionService.deleteElection(id);
     return ResponseEntity.noContent().build();
   }
+  @PostMapping("/create-json")
+  public ResponseEntity<?> createByJson(@RequestBody Election election) {
+    System.out.println("Role ID nhận được: " + election.getRoleId());
+
+    if (election.getCandidates() != null) {
+      election.getCandidates().forEach(c -> c.setElection(election));
+    }
+
+    election.setIsDelete(1);
+    if (election.getStatus() == null) election.setStatus("OPEN");
+
+    Election saved = electionRepository.save(election);
+    return ResponseEntity.ok(saved);
+  }
   @GetMapping("/{id}")
   public ResponseEntity<ElectionResponse> getById(@PathVariable Long id) {
-    // Giả sử bạn đã có hàm findById trong Service trả về Entity Election
     Election e = electionService.getById(id);
-
     ElectionResponse dto = new ElectionResponse();
     dto.setId(e.getId());
     dto.setTitle(e.getTitle());
     dto.setDescription(e.getDescription());
     dto.setStatus(e.getStatus());
-    dto.setStartDate(e.getStartDate());
-    dto.setEndDate(e.getEndDate());
+    dto.setStartDate(e.getStartTime());
+    dto.setEndDate(e.getEndTime());
     dto.setRoleId(e.getRoleId());
+    dto.setImage(e.getImage());
 
+    if (e.getCandidates() != null) {
+      dto.setCandidates(e.getCandidates().stream().map(c ->
+          CandidateResponse.builder()
+              .id(c.getId())
+              .name(c.getName())
+              .description(c.getDescription())
+              .imageUrl(c.getImageUrl())
+              .electionId(e.getId())
+              .build()
+      ).collect(Collectors.toList()));
+    }
     return ResponseEntity.ok(dto);
   }
-
-
 }

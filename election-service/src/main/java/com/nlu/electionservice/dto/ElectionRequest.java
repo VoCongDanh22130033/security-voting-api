@@ -1,4 +1,4 @@
-// ElectionRequest.java
+
 package com.nlu.electionservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -11,14 +11,16 @@ public class ElectionRequest {
   private Long id;
   private String title;
   private String description;
+  private String status;
 
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") // Thêm dòng này
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
   private LocalDateTime startTime;
 
-  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") // Thêm dòng này
+  @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
   private LocalDateTime endTime;
 
   private Long roleId;
   private List<CandidateRequest> candidates;
   private String imageUrl;
+
 }

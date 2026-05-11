@@ -15,7 +15,7 @@ public class AnonymousVote {
   @Column(name = "election_id")
   private Long electionId;
 
-  // Ánh xạ chính xác với cột blinded_content trong database
+
   @Column(name = "blinded_content", columnDefinition = "TEXT")
   private String blindedContent;
 

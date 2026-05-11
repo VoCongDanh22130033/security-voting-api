@@ -1,12 +1,13 @@
-package com.nlu.electionservice.entity;
+package com.nlu.authservice.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 
 @Entity
 @Table(name = "voters")
-@Data // Lombok sẽ tạo hàm getId() tại đây
+@Data
 public class Voter {
+
   @Id
   @Column(name = "user_id")
   private Long userId;
