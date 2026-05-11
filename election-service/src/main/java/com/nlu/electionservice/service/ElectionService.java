@@ -61,10 +61,11 @@ public class ElectionService {
         candidate.setDescription(cReq.getDescription());
         candidate.setImageUrl(cReq.getImageUrl());
         candidate.setElection(election);
+        election.setRoleId(request.getRoleId());
         election.getCandidates().add(candidate);
       });
     }
-
+    election.setStatus(calculateStatus(request.getStartTime(), request.getEndTime()));
     return electionRepository.save(election);
   }
 
