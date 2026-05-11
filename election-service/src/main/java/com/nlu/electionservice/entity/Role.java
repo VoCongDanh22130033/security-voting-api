@@ -1,4 +1,4 @@
-package com.nlu.voterservice.entity;
+package com.nlu.electionservice.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

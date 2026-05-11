@@ -16,7 +16,6 @@ public class VoterService {
     Voter voter = voterRepository.findByEmail(email)
         .orElseThrow(() -> new RuntimeException("Cử tri không tồn tại với email: " + email));
 
-    // Lấy tên role đầu tiên từ danh sách roles của User
     String roleName = voter.getUser().getRoles().stream()
         .findFirst()
         .map(role -> role.getName())

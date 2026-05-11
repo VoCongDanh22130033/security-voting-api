@@ -24,4 +24,6 @@ public class CloudinaryService {
       throw new RuntimeException("Lỗi khi upload ảnh lên Cloudinary: " + e.getMessage());
     }
   }
+
+
 }

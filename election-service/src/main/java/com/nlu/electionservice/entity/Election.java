@@ -6,6 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Where;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "elections")
 @Data
@@ -36,14 +39,21 @@ public class Election {
   @Column(name = "is_delete")
   private Integer isDelete = 1;
 
-  // Sử dụng 'image' đồng bộ với logic xử lý
   @Column(name = "image_url", length = 500)
   private String image;
 
+  @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<Candidate> candidates = new ArrayList<>();
+
+  public void setCandidates(List<Candidate> candidates) {
+    this.candidates = candidates;
+    if (candidates != null) {
+      for (Candidate c : candidates) {
+        c.setElection(this);
+      }
+    }
+  }
+
   public LocalDateTime getStartDate() { return this.startTime; }
   public LocalDateTime getEndDate() { return this.endTime; }
-
-  // Các hàm này giúp đảm bảo mapping chính xác[cite: 11]
-  public String getImage() { return image; }
-  public void setImage(String image) { this.image = image; }
 }

@@ -1,18 +1,18 @@
 package com.nlu.electionservice.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder; // ✅ Thêm Builder để fix lỗi ở Controller
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
-@Setter
-@Getter
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class CandidateResponse {
   private Long id;
   private String name;
   private String description;
   private Long electionId;
-  private long voteCount;
   private String imageUrl;
-
 }

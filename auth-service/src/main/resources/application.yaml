@@ -2,6 +2,19 @@ server:
   port: 8081
 
 spring:
+  # Chuyển mail vào trong mục spring
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: danhv5879@gmail.com
+    password: "hozq aayx vwvg gujz"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
   datasource:
     url: jdbc:mysql://localhost:3306/e_voting_system
     username: root
@@ -9,7 +22,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
 
 jwt:
