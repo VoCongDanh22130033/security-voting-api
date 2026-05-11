@@ -10,5 +10,4 @@ public class CandidateRequest {
   private Long electionId;
   private String imageUrl;
 
-
 }

@@ -6,6 +6,7 @@ import com.nlu.electionservice.entity.Candidate;
 import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.repository.CandidateRepository;
 import com.nlu.electionservice.repository.ElectionRepository;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,7 @@ public class ElectionService {
 
   @Transactional
   public Election createElection(Election election, List<Candidate> candidates) {
-    election.setStatus("OPEN");
+    election.setStatus(calculateStatus(election.getStartTime(), election.getEndTime()));
     election.setIsDelete(1);
 
     Election saved = electionRepository.save(election);
@@ -99,5 +100,16 @@ public class ElectionService {
   public Election getById(Long id) {
     return electionRepository.findById(id)
         .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử với ID: " + id));
+  }
+  // thời gian đóng mở , sắp mở của cuộc bầu cử
+  public String calculateStatus(LocalDateTime start, LocalDateTime end) {
+    LocalDateTime now = LocalDateTime.now();
+    if (now.isBefore(start)) {
+      return "UPCOMING";
+    } else if (now.isAfter(end)) {
+      return "CLOSED";
+    } else {
+      return "OPEN";
+    }
   }
 }
