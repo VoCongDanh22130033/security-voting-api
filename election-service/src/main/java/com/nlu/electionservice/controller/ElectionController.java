@@ -8,6 +8,7 @@ import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.service.ElectionService;
 import com.nlu.electionservice.service.CloudinaryService;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,8 +109,14 @@ public class ElectionController {
       election.getCandidates().forEach(c -> c.setElection(election));
     }
 
-    election.setIsDelete(1);
-    if (election.getStatus() == null) election.setStatus("OPEN");
+    LocalDateTime now = LocalDateTime.now();
+    if (election.getStartTime() != null && now.isBefore(election.getStartTime())) {
+      election.setStatus("UPCOMING");
+    } else if (election.getEndTime() != null && now.isAfter(election.getEndTime())) {
+      election.setStatus("ENDED");
+    } else {
+      election.setStatus("OPEN");
+    }
 
     Election saved = electionRepository.save(election);
     return ResponseEntity.ok(saved);

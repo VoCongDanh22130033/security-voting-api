@@ -15,7 +15,6 @@ public class AnonymousVote {
   @Column(name = "election_id")
   private Long electionId;
 
-
   @Column(name = "blinded_content", columnDefinition = "TEXT")
   private String blindedContent;
 
