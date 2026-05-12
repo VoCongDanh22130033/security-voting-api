@@ -18,8 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      # 'update' sẽ tự động tạo bảng candidates và elections dựa trên Entity nếu DB trống
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
