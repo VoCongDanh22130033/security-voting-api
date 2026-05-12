@@ -11,6 +11,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import java.util.Set;
+import java.util.logging.Level;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,5 +39,6 @@ public class User {
       inverseJoinColumns = @JoinColumn(name = "role_id")
   )
   private Set<Role> roles;
+
 
 }
