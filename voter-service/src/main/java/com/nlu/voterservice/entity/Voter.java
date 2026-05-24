@@ -25,4 +25,5 @@ public class Voter {
 
   @Column(name = "is_verified")
   private boolean isVerified;
+
 }

@@ -17,6 +17,7 @@ public class User {
   private String password;
   private String phone;
   private String image_url;
+  private String fullName;
 
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
@@ -25,4 +26,6 @@ public class User {
       inverseJoinColumns = @JoinColumn(name = "role_id")
   )
   private Set<Role> roles;
+
+
 }
