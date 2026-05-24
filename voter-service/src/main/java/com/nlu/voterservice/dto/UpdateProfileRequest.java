@@ -1,4 +1,4 @@
-package com.nlu.voterservice.repository;
+package com.nlu.voterservice.dto;
 
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;

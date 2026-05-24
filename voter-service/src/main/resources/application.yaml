@@ -15,6 +15,19 @@ spring:
       ddl-auto: update
     show-sql: true
 
+  # ĐƯA KHỐI MAIL VÀO ĐÂY (Ngang hàng với datasource/jpa bên trong spring)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: danhv5879@gmail.com
+    password: "hozq aayx vwvg gujz"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true # Sửa lại thành true đầy đủ
+
 Cloudinary:
   cloud-name: dzi4yzwjk
   api-key: 571788156588531

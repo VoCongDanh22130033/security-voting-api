@@ -1,9 +1,13 @@
 package com.nlu.voterservice.controller;
 
-import com.nlu.voterservice.dto.VoterResponse;
+
+import com.nlu.voterservice.dto.ResetPasswordWithOtpRequest;
 import com.nlu.voterservice.entity.Voter;
-import com.nlu.voterservice.repository.UpdateProfileRequest;
+import com.nlu.voterservice.dto.ForgotPasswordRequest;
+
+import com.nlu.voterservice.dto.UpdateProfileRequest;
 import com.nlu.voterservice.service.VoterService;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +43,26 @@ public class VoterController {
       return ResponseEntity.ok(updatedVoter);
     } catch (Exception e) {
       System.err.println(">>> [BE] Lỗi cập nhật hồ sơ: " + e.getMessage());
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @PostMapping("/forgot-password")
+  public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+    try {
+      voterService.sendOtpForgotPassword(request.getEmail());
+      return ResponseEntity.ok(Map.of("message", "Mã OTP đã được gửi về Email của bạn."));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @PostMapping("/reset-password-otp")
+  public ResponseEntity<?> resetPasswordWithOtp(@RequestBody ResetPasswordWithOtpRequest request) {
+    try {
+      voterService.resetPasswordWithOtp(request);
+      return ResponseEntity.ok(Map.of("message", "Đổi mật khẩu thành công!"));
+    } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
