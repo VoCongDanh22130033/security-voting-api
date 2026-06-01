@@ -1,5 +1,6 @@
 package com.nlu.authservice.service;
 
+import com.nlu.authservice.dto.CreateModeratorRequest;
 import com.nlu.authservice.dto.LoginRequest;
 import com.nlu.authservice.dto.LoginResponse;
 import com.nlu.authservice.dto.RegisterRequest;
@@ -19,7 +20,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.Set;
-
+import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
@@ -107,13 +108,11 @@ public User loginReturnUser(LoginRequest request) {
         user.getImage_url()
     );
   }
-
   // gửi mã xác thực
   public void sendVerificationEmail(User user) {
     String token = String.valueOf(new Random().nextInt(899999) + 100000);
     VerificationToken vToken = new VerificationToken(user, token);
     tokenRepository.save(vToken);
-
     SimpleMailMessage message = new SimpleMailMessage();
     message.setTo(user.getEmail());
     message.setSubject("Xác thực tài khoản E-Voting");
@@ -128,11 +127,35 @@ public User loginReturnUser(LoginRequest request) {
       throw new RuntimeException("Mã đã hết hạn");
     }
 
+
     User user = vToken.getUser();
     user.setVerified(true);
     userRepository.save(user);
     tokenRepository.delete(vToken);
     return true;
+  }
+
+  @Transactional
+  public String createModerator(CreateModeratorRequest request, String superAdminRole) {
+    if (userRepository.existsByEmail(request.getEmail())) {
+      throw new RuntimeException("Lỗi: Email đã được sử dụng!");
+    }
+    Role moderatorRole = roleRepository.findByName("ROLE_ORGANIZER")
+        .orElseThrow(() -> new RuntimeException("Lỗi hệ thống: Không tìm thấy ROLE_ORGANIZER trong bảng roles!"));
+
+    User user = new User();
+    user.setFullName(request.getFullName());
+    user.setPassword(passwordEncoder.encode(request.getPassword()));
+    user.setEmail(request.getEmail());
+    user.setPhone(request.getPhone());
+    user.setVerified(true);
+    user.setIsLock(0);
+
+    user.setRoles(Set.of(moderatorRole));
+
+    userRepository.save(user);
+
+    return "Tạo tài khoản chủ trì bầu cử thành công! Email: " + request.getEmail();
   }
 
 }

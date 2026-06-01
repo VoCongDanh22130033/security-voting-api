@@ -30,14 +30,16 @@ public class VoterController {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
-  // --- SỬA LẠI THÀNH @ModelAttribute ---
+
   @PutMapping("/profile")
   public ResponseEntity<?> updateProfile(
       @RequestHeader("X-User-Email") String email,
-      @ModelAttribute UpdateProfileRequest request) { // Tuyệt đối KHÔNG dùng @RequestBody ở đây
+      @ModelAttribute UpdateProfileRequest request) {
     try {
       System.out.println(">>> [BE] Tiếp nhận FormData cập nhật hồ sơ cho email: " + email);
-      System.out.println(">>> [BE] File avatar đi kèm: " + (request.getAvatar() != null ? request.getAvatar().getOriginalFilename() : "Không có"));
+      System.out.println(
+          ">>> [BE] File avatar đi kèm: " + (request.getAvatar() != null ? request.getAvatar()
+              .getOriginalFilename() : "Không có"));
 
       Voter updatedVoter = voterService.updateProfile(email, request);
       return ResponseEntity.ok(updatedVoter);
@@ -67,23 +69,70 @@ public class VoterController {
     }
   }
 
-  // --- ADMIN / MANAGEMENT: Xem chi tiết cử tri theo userId ---
   @GetMapping("/{id}")
   public ResponseEntity<?> getVoterById(@PathVariable("id") Long id) {
     try {
-      Voter voter = voterService.getVoterById(id);
-      return ResponseEntity.ok(voter);
+      return ResponseEntity.ok(voterService.getVoterById(id));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
-
-  // --- ADMIN / MANAGEMENT: Khóa tài khoản cử tri ---
   @PostMapping("/{id}/lock")
   public ResponseEntity<?> lockVoterAccount(@PathVariable("id") Long id) {
     try {
       voterService.lockAccount(id);
       return ResponseEntity.ok(Map.of("message", "Tài khoản đã bị khóa."));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @PostMapping("/{id}/unlock")
+  public ResponseEntity<?> unlockVoterAccount(@PathVariable("id") Long id) {
+    try {
+      voterService.unlockAccount(id);
+      return ResponseEntity.ok(Map.of("message", "Tài khoản đã được mở khóa."));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  //  (roleId: 2 = voter, 3 = nguoi chu tri) ---
+  @GetMapping("/admin/list")
+  public ResponseEntity<?> listByRole(@RequestParam("role") Long roleId) {
+    try {
+      java.util.List<Voter> list = voterService.listVotersByRole(roleId);
+      return ResponseEntity.ok(list);
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  // --- ADMIN: Thay đổi role cho user ---
+  @PostMapping("/admin/change-role/{id}")
+  public ResponseEntity<?> changeRole(@PathVariable("id") Long id, @RequestParam("role") Long roleId) {
+    try {
+      Voter updated = voterService.changeUserRole(id, roleId);
+      return ResponseEntity.ok(updated);
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @GetMapping("/admin/hosts")
+  public ResponseEntity<?> getAllHosts() {
+    try {
+      return ResponseEntity.ok(voterService.getAllUsersByRoleId(3L));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  // (Role ID = 2)
+  @GetMapping("/admin/voters")
+  public ResponseEntity<?> getAllVoters() {
+    try {
+      return ResponseEntity.ok(voterService.getAllUsersByRoleId(2L));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
