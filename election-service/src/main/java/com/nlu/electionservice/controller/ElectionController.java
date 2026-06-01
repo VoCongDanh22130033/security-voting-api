@@ -2,6 +2,7 @@ package com.nlu.electionservice.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.nlu.electionservice.dto.CandidateResponse;
+import com.nlu.electionservice.dto.CreateElectionRequest;
 import com.nlu.electionservice.dto.ElectionRequest;
 import com.nlu.electionservice.dto.ElectionResponse;
 import com.nlu.electionservice.entity.Election;
@@ -98,27 +99,36 @@ public class ElectionController {
 
     return ResponseEntity.ok(response);
   }
+//  @PostMapping("/create")
+//  public ResponseEntity<?> create(@RequestPart("election") String electionJson,
+//      @RequestPart(value = "file", required = false) MultipartFile file) {
+//    try {
+//      Election election = mapper.readValue(electionJson, Election.class);
+//
+//      if (file != null && !file.isEmpty()) {
+//        String imageUrl = cloudinaryService.uploadFile(file);
+//        election.setImageUrl(imageUrl);
+//      }
+//
+//      if (election.getStatus() == null) election.setStatus("OPEN");
+//
+//      if (election.getCandidates() != null) {
+//        election.getCandidates().forEach(c -> c.setElection(election));
+//      }
+//
+//      Election saved = electionService.createElection(election, election.getCandidates());
+//      return ResponseEntity.ok(saved);
+//    } catch (Exception e) {
+//      return ResponseEntity.internalServerError().body("Lỗi: " + e.getMessage());
+//    }
+//  }
   @PostMapping("/create")
-  public ResponseEntity<?> create(@RequestPart("election") String electionJson,
-      @RequestPart(value = "file", required = false) MultipartFile file) {
+  public ResponseEntity<?> createElection(@RequestBody CreateElectionRequest request) {
     try {
-      Election election = mapper.readValue(electionJson, Election.class);
-
-      if (file != null && !file.isEmpty()) {
-        String imageUrl = cloudinaryService.uploadFile(file);
-        election.setImageUrl(imageUrl);
-      }
-
-      if (election.getStatus() == null) election.setStatus("OPEN");
-
-      if (election.getCandidates() != null) {
-        election.getCandidates().forEach(c -> c.setElection(election));
-      }
-
-      Election saved = electionService.createElection(election, election.getCandidates());
-      return ResponseEntity.ok(saved);
+      Election newElection = electionService.createMultiRoundElectionWithCandidates(request);
+      return ResponseEntity.ok(newElection);
     } catch (Exception e) {
-      return ResponseEntity.internalServerError().body("Lỗi: " + e.getMessage());
+      return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
   @PostMapping("/upload-single")

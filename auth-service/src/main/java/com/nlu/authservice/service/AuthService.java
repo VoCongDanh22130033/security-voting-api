@@ -76,11 +76,25 @@ public class AuthService {
     return "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.";
   }
 
-  public User loginReturnUser(LoginRequest request) {
-    System.out.println("Đăng nhập với email: [" + request.getEmail() + "]");
-    return userRepository.findByEmail(request.getEmail().trim())
-        .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+//  public User loginReturnUser(LoginRequest request) {
+//    System.out.println("Đăng nhập với email: [" + request.getEmail() + "]");
+//    return userRepository.findByEmail(request.getEmail().trim())
+//        .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+//  }
+// Sửa lại hàm loginReturnUser trong file AuthService.java[cite: 8]
+public User loginReturnUser(LoginRequest request) {
+  System.out.println("Đăng nhập với email: [" + request.getEmail() + "]");
+
+  User user = userRepository.findByEmail(request.getEmail().trim())
+      .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+
+  // KIỂM TRA TRƯỜNG IS_LOCK: Nếu bằng 1 thì chặn và quăng thông báo lỗi luôn
+  if (user.getIsLock() != null && user.getIsLock() == 1) {
+    throw new RuntimeException("Tài khoản của bạn đã bị khóa bởi ban quản trị hệ thống!");
   }
+
+  return user;
+}
 
   public LoginResponse loginWithDetails(LoginRequest request, String token) {
     User user = userRepository.findByEmail(request.getEmail().trim())

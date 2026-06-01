@@ -19,12 +19,16 @@ public class User {
   private String image_url;
   private String fullName;
 
+  @Column(name = "is_lock", nullable = false)
+  private Integer isLock = 0;
+
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",
       joinColumns = @JoinColumn(name = "user_id"),
       inverseJoinColumns = @JoinColumn(name = "role_id")
   )
+
 
   private Set<Role> roles;
 

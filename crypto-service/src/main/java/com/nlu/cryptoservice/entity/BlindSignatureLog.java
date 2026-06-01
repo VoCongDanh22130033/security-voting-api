@@ -18,6 +18,9 @@ public class BlindSignatureLog {
   @Column(name = "election_id")
   private Long electionId;
 
+  @Column(name = "round_id")
+  private Long roundId;
+
   @Column(name = "used_at", insertable = false, updatable = false)
   private LocalDateTime usedAt;
 }

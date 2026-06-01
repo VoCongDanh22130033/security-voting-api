@@ -1,6 +1,7 @@
 package com.nlu.authservice.entity;
 
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -31,6 +32,8 @@ public class User {
   private String phone;
   private String image_url;
   private boolean isVerified;
+  @Column(name = "is_lock", nullable = false)
+  private Integer isLock = 0;
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",

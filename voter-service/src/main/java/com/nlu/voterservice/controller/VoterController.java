@@ -66,4 +66,26 @@ public class VoterController {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
+
+  // --- ADMIN / MANAGEMENT: Xem chi tiết cử tri theo userId ---
+  @GetMapping("/{id}")
+  public ResponseEntity<?> getVoterById(@PathVariable("id") Long id) {
+    try {
+      Voter voter = voterService.getVoterById(id);
+      return ResponseEntity.ok(voter);
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  // --- ADMIN / MANAGEMENT: Khóa tài khoản cử tri ---
+  @PostMapping("/{id}/lock")
+  public ResponseEntity<?> lockVoterAccount(@PathVariable("id") Long id) {
+    try {
+      voterService.lockAccount(id);
+      return ResponseEntity.ok(Map.of("message", "Tài khoản đã bị khóa."));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
 }

@@ -56,6 +56,30 @@ public class VoterService {
     return voterRepository.findByEmail(email)
         .orElseThrow(() -> new RuntimeException("Không tìm thấy cử tri với email: " + email));
   }
+
+  public Voter getVoterById(Long userId) {
+    return voterRepository.findById(userId)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy cử tri với id: " + userId));
+  }
+
+  // Thay thế hàm lockAccount cũ trong VoterService.java
+  @Transactional
+  public void lockAccount(Long userId) {
+    Voter voter = voterRepository.findById(userId)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy cử tri với id: " + userId));
+
+    // Lấy ra thực thể User liên kết từ Voter[cite: 2]
+    User user = voter.getUser();
+    if (user == null) {
+      throw new RuntimeException("Không tìm thấy tài khoản người dùng liên kết với cử tri này!");
+    }
+
+    // Cập nhật trường is_lock thành 1 (Đại diện cho trạng thái bị khóa)
+    user.setIsLock(1);
+
+    // Lưu và đồng bộ xuống Database ngay lập tức[cite: 2]
+    voterRepository.saveAndFlush(voter);
+  }
   @Transactional
   public Voter updateProfile(String email, UpdateProfileRequest request) {
     // 1. Tìm Voter theo email (Lệnh này đồng thời lấy ra đối tượng User tương ứng nhờ JPA Join)

@@ -3,14 +3,11 @@ package com.nlu.cryptoservice.service;
 import com.nlu.cryptoservice.entity.CryptoKey;
 import com.nlu.cryptoservice.repository.CryptoKeyRepository;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
-import org.bouncycastle.crypto.generators.RSAKeyPairGenerator;
-import org.bouncycastle.crypto.params.RSAKeyGenerationParameters;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.math.BigInteger;
-import java.security.SecureRandom;
 import java.util.Map;
 
 @Service
@@ -20,34 +17,58 @@ public class RSAService {
   @Autowired
   private CryptoKeyRepository cryptoKeyRepository;
 
+  // Sử dụng ID mặc định 1L để đại diện cho cuộc bầu cử hiện tại
+  private final Long DEFAULT_SYSTEM_ID = 1L;
+
   @PostConstruct
   public void init() {
-    // 1. Sinh cặp khóa RSA 2048-bit
-    RSAKeyPairGenerator generator = new RSAKeyPairGenerator();
-    generator.init(new RSAKeyGenerationParameters(new BigInteger("65537"), new SecureRandom(), 2048, 80));
-    this.keyPair = generator.generateKeyPair();
+    try {
+      // KIỂM TRA ĐỒNG BỘ: Nếu DB đã có khóa cũ, ép hệ thống nạp lại từ DB lên RAM, tuyệt đối không sinh ngẫu nhiên nữa
+      if (cryptoKeyRepository.existsById(DEFAULT_SYSTEM_ID)) {
+        System.out.println(">>> [Crypto System] Phát hiện khóa RSA cũ trong DB. Tiến hành khôi phục lên bộ nhớ RAM...");
 
-    RSAKeyParameters pub = (RSAKeyParameters) keyPair.getPublic();
-    RSAKeyParameters priv = (RSAKeyParameters) keyPair.getPrivate();
+        CryptoKey keyEntity = cryptoKeyRepository.findById(DEFAULT_SYSTEM_ID).get();
+        BigInteger modulus = new BigInteger(keyEntity.getPublicKey().trim(), 16);
+        BigInteger privateExponent = new BigInteger(keyEntity.getPrivateKey().trim(), 16);
+        BigInteger publicExponent = new BigInteger("65537"); // Số mũ e chuẩn cố định
 
-    // 2. Lưu khóa vào DB dưới dạng Hex để dễ dàng truy vấn hoặc debug[cite: 11]
-    CryptoKey keyEntity = new CryptoKey();
-    keyEntity.setPublicKey(pub.getModulus().toString(16));
-    keyEntity.setPrivateKey(priv.getExponent().toString(16));
-    cryptoKeyRepository.save(keyEntity);
-    System.out.println(">>> [Crypto] Khởi tạo và lưu khóa RSA thành công.");
+        RSAKeyParameters pubKeyParams = new RSAKeyParameters(false, modulus, publicExponent);
+        RSAKeyParameters privKeyParams = new RSAKeyParameters(true, modulus, privateExponent);
+
+        this.keyPair = new AsymmetricCipherKeyPair(pubKeyParams, privKeyParams);
+        System.out.println(">>> [Crypto System SUCCESS] Đã đồng bộ cặp khóa RSA từ DB lên hệ thống ổn định.");
+      } else {
+        // Nếu DB trống rỗng hoàn toàn thì mới tiến hành sinh lần đầu tiên
+        System.out.println(">>> [Crypto System] DB trống. Đang tiến hành khởi tạo cặp khóa RSA nguyên bản...");
+        org.bouncycastle.crypto.generators.RSAKeyPairGenerator generator = new org.bouncycastle.crypto.generators.RSAKeyPairGenerator();
+        generator.init(new org.bouncycastle.crypto.params.RSAKeyGenerationParameters(
+            new BigInteger("65537"), new java.security.SecureRandom(), 2048, 80));
+        this.keyPair = generator.generateKeyPair();
+
+        RSAKeyParameters pub = (RSAKeyParameters) keyPair.getPublic();
+        RSAKeyParameters priv = (RSAKeyParameters) keyPair.getPrivate();
+
+        CryptoKey keyEntity = new CryptoKey();
+        keyEntity.setElectionId(DEFAULT_SYSTEM_ID); // Gán ID cố định để tránh lỗi Identifier
+        keyEntity.setPublicKey(pub.getModulus().toString(16));
+        keyEntity.setPrivateKey(priv.getExponent().toString(16));
+        cryptoKeyRepository.save(keyEntity);
+        System.out.println(">>> [Crypto System] Đã lưu cặp khóa RSA khởi thủy xuống cơ sở dữ liệu.");
+      }
+    } catch (Exception e) {
+      System.err.println(">>> [Crypto System ERROR] Thất bại khi thiết lập trạng thái khóa: " + e.getMessage());
+      e.printStackTrace();
+    }
   }
 
-  // 3. Trả về thông số cho Frontend làm mù phiếu[cite: 11, 14]
   public Map<String, String> getPublicKeyParams() {
     RSAKeyParameters pub = (RSAKeyParameters) keyPair.getPublic();
     return Map.of(
         "modulus", pub.getModulus().toString(16),
-        "exponent", pub.getExponent().toString(16) // Sử dụng getExponent() cho RSAKeyParameters[cite: 11]
+        "exponent", pub.getExponent().toString(16)
     );
   }
 
-  // Các phương thức getter hỗ trợ cho các service nội bộ[cite: 11]
   public RSAKeyParameters getPublicKey() { return (RSAKeyParameters) keyPair.getPublic(); }
   public RSAKeyParameters getPrivateKey() { return (RSAKeyParameters) keyPair.getPrivate(); }
 }

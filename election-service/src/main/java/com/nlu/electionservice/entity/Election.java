@@ -16,6 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 @Where(clause = "is_delete = 1")
 public class Election {
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -42,6 +43,12 @@ public class Election {
   @Column(name = "image_url", length = 500)
   private String imageUrl;
 
+  @Column(name = "total_rounds")
+  private Integer totalRounds;
+
+  @Column(name = "created_at")
+  private LocalDateTime createdAt = LocalDateTime.now();
+
   @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<Candidate> candidates = new ArrayList<>();
 
@@ -53,7 +60,4 @@ public class Election {
       }
     }
   }
-
-  public LocalDateTime getStartDate() { return this.startTime; }
-  public LocalDateTime getEndDate() { return this.endTime; }
 }

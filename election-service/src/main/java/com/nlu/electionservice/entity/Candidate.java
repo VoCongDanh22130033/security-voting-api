@@ -17,15 +17,16 @@ public class Candidate {
   private Long id;
 
   private String name;
-
+  @Column(name = "party")
+  private String party;
   @Column(columnDefinition = "TEXT")
   private String description;
 
-  @Column(name = "image_url")
+  @Column(name = "image_url", columnDefinition = "LONGTEXT")
   private String imageUrl;
 
   @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "election_id")
-  @JsonIgnore
+  @JoinColumn(name = "election_id", nullable = false)
   private Election election;
+
 }
