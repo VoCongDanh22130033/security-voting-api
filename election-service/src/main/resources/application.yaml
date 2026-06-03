@@ -9,11 +9,10 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
   datasource:
-    # 1. Đổi sang giao thức mysql
-    url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    # ĐÃ ĐỒNG BỘ: Chuyển serverTimezone từ UTC sang Asia/Ho_Chi_Minh và bọc thêm useLegacyDatetimeCode=false
+    url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&useLegacyDatetimeCode=false&allowPublicKeyRetrieval=true
     username: root
     password:
-    # 2. Khai báo Driver của MySQL
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -22,7 +21,6 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        # 3. Sử dụng Dialect cho MySQL 8
         dialect: org.hibernate.dialect.MySQL8Dialect
 
 cloudinary:

@@ -49,6 +49,9 @@ public class Election {
   @Column(name = "created_at")
   private LocalDateTime createdAt = LocalDateTime.now();
 
+  @Column(name = "winner_candidate_id")
+  private Long winnerId;
+
   @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<Candidate> candidates = new ArrayList<>();
 
@@ -59,5 +62,9 @@ public class Election {
         c.setElection(this);
       }
     }
+  }
+
+  public Long getWinnerId() {
+    return this.winnerId;
   }
 }

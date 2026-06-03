@@ -9,4 +9,5 @@ public class VoteAnonymousRequest {
   private Long candidateId;
   private String messageToken;
   private String signature;
+
 }

@@ -11,10 +11,10 @@ import java.util.Map;
 @Repository
 public interface VoteRepository extends JpaRepository<Vote, Long> {
 
-  // Truy vấn gom nhóm đếm tổng số phiếu thực tế của từng ứng viên theo Election và Round
-  @Query(value = "SELECT candidate_id as candidateId, COUNT(*) as voteCount " +
-      "FROM votes " +
-      "WHERE election_id = :electionId AND round_id = :roundId " +
-      "GROUP BY candidate_id", nativeQuery = true)
+  @Query(value = "SELECT v.candidate_id as candidateId, COUNT(v.id) as voteCount " +
+          "FROM votes v " +
+          "WHERE v.election_id = :electionId AND v.round_id = :roundId " +
+          "GROUP BY v.candidate_id " +
+          "ORDER BY voteCount DESC", nativeQuery = true)
   List<Map<String, Object>> countVotesByCandidate(@Param("electionId") Long electionId, @Param("roundId") Long roundId);
 }

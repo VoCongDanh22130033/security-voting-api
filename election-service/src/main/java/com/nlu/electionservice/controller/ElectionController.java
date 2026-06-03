@@ -6,14 +6,21 @@ import com.nlu.electionservice.dto.CreateElectionRequest;
 import com.nlu.electionservice.dto.ElectionRequest;
 import com.nlu.electionservice.dto.ElectionResponse;
 import com.nlu.electionservice.entity.Election;
+import com.nlu.electionservice.entity.ElectionRound;
+import com.nlu.electionservice.entity.Candidate;
+import com.nlu.electionservice.repository.CandidateRepository;
 import com.nlu.electionservice.repository.ElectionRepository;
+import com.nlu.electionservice.repository.ElectionRoundRepository;
 import com.nlu.electionservice.service.ElectionService;
 import com.nlu.electionservice.service.CloudinaryService;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,6 +34,10 @@ public class ElectionController {
   private ElectionService electionService;
   @Autowired
   private ElectionRepository electionRepository;
+  @Autowired
+  private ElectionRoundRepository roundRepository;
+  @Autowired
+  private CandidateRepository candidateRepository;
   private final ObjectMapper mapper = new ObjectMapper()
       .registerModule(new JavaTimeModule());
 
@@ -37,42 +48,11 @@ public class ElectionController {
     return ResponseEntity.ok(java.util.Map.of("url", url));
   }
 
-//  public ResponseEntity<List<ElectionResponse>> getAll() {
-//    List<Election> elections = electionService.getAllElections();
-//
-//    List<ElectionResponse> response = elections.stream().map(e -> {
-//      ElectionResponse dto = new ElectionResponse();
-//      dto.setId(e.getId());
-//      dto.setTitle(e.getTitle());
-//      dto.setDescription(e.getDescription());
-//      dto.setStatus(e.getStatus());
-//      dto.setStartDate(e.getStartTime());
-//      dto.setEndDate(e.getEndTime());
-//      dto.setImage(e.getImage());
-//      dto.setRoleId(e.getRoleId());
-//
-//      if(e.getCandidates() != null) {
-//        dto.setCandidates(e.getCandidates().stream().map(c ->
-//            CandidateResponse.builder()
-//                .id(c.getId())
-//                .name(c.getName())
-//                .imageUrl(c.getImageUrl())
-//                .description(c.getDescription())
-//                .build()
-//        ).collect(Collectors.toList()));
-//      }
-//      return dto;
-//    }).collect(Collectors.toList());
-//
-//    return ResponseEntity.ok(response);
-//  }
   @GetMapping
   public ResponseEntity<List<ElectionResponse>> getAll() {
-    // 1. Lấy danh sách trực tiếp từ repository và sắp xếp ID giảm dần (mới nhất lên đầu)
     List<Election> list = electionRepository.findAll(org.springframework.data.domain.Sort.by(
         org.springframework.data.domain.Sort.Direction.DESC, "id"));
 
-    // 2. Map từ danh sách 'list' (đã sắp xếp) sang 'ElectionResponse'
     List<ElectionResponse> response = list.stream().map(e -> {
       ElectionResponse dto = new ElectionResponse();
       dto.setId(e.getId());
@@ -99,29 +79,7 @@ public class ElectionController {
 
     return ResponseEntity.ok(response);
   }
-//  @PostMapping("/create")
-//  public ResponseEntity<?> create(@RequestPart("election") String electionJson,
-//      @RequestPart(value = "file", required = false) MultipartFile file) {
-//    try {
-//      Election election = mapper.readValue(electionJson, Election.class);
-//
-//      if (file != null && !file.isEmpty()) {
-//        String imageUrl = cloudinaryService.uploadFile(file);
-//        election.setImageUrl(imageUrl);
-//      }
-//
-//      if (election.getStatus() == null) election.setStatus("OPEN");
-//
-//      if (election.getCandidates() != null) {
-//        election.getCandidates().forEach(c -> c.setElection(election));
-//      }
-//
-//      Election saved = electionService.createElection(election, election.getCandidates());
-//      return ResponseEntity.ok(saved);
-//    } catch (Exception e) {
-//      return ResponseEntity.internalServerError().body("Lỗi: " + e.getMessage());
-//    }
-//  }
+
   @PostMapping("/create")
   public ResponseEntity<?> createElection(@RequestBody CreateElectionRequest request) {
     try {
@@ -138,8 +96,16 @@ public class ElectionController {
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<Election> update(@PathVariable Long id, @RequestBody ElectionRequest request) {
-    return ResponseEntity.ok(electionService.updateElection(id, request));
+  public ResponseEntity<?> update(@PathVariable Long id, @RequestBody CreateElectionRequest request) {
+    try {
+      Election updatedElection = electionService.updateMultiRoundElection(id, request);
+      return ResponseEntity.ok(updatedElection);
+    } catch (IllegalStateException e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    } catch (Exception e) {
+      e.printStackTrace();
+      return ResponseEntity.status(500).body("Lỗi máy chủ: " + e.getMessage());
+    }
   }
 
   @DeleteMapping("/{id}")
@@ -168,6 +134,7 @@ public class ElectionController {
     System.out.println("Link ảnh nhận được: " + election.getImageUrl());
     return ResponseEntity.ok(saved);
   }
+  
   @GetMapping("/{id}")
   public ResponseEntity<ElectionResponse> getById(@PathVariable Long id) {
     Election e = electionService.getById(id);
@@ -180,18 +147,105 @@ public class ElectionController {
     dto.setEndDate(e.getEndTime());
     dto.setRoleId(e.getRoleId());
     dto.setImage(e.getImageUrl());
+    dto.setWinnerId(e.getWinnerId());
+    
+    List<ElectionRound> allRounds = roundRepository.findByElectionId(id);
+    dto.setRounds(allRounds);
 
-    if (e.getCandidates() != null) {
-      dto.setCandidates(e.getCandidates().stream().map(c ->
-          CandidateResponse.builder()
-              .id(c.getId())
-              .name(c.getName())
-              .description(c.getDescription())
-              .imageUrl(c.getImageUrl())
-              .electionId(e.getId())
-              .build()
-      ).collect(Collectors.toList()));
+    Optional<ElectionRound> roundToFetchCandidatesFrom = Optional.empty();
+
+    if ("OPEN".equals(e.getStatus())) {
+        roundToFetchCandidatesFrom = allRounds.stream()
+            .filter(r -> "OPEN".equals(r.getStatus()))
+            .findFirst();
+    } else if ("UPCOMING".equals(e.getStatus())) {
+        roundToFetchCandidatesFrom = allRounds.stream()
+            .filter(r -> "UPCOMING".equals(r.getStatus()))
+            .min(Comparator.comparing(ElectionRound::getRoundNumber));
+    } else { // CLOSED or other statuses
+        // For closed elections, we might want to show candidates of the first round by default
+        roundToFetchCandidatesFrom = allRounds.stream()
+            .min(Comparator.comparing(ElectionRound::getRoundNumber));
     }
+
+    if (roundToFetchCandidatesFrom.isPresent()) {
+        ElectionRound round = roundToFetchCandidatesFrom.get();
+        dto.setCurrentRoundId(round.getId());
+        List<Candidate> candidates = candidateRepository.findAllByRoundId(round.getId());
+        dto.setCandidates(candidates.stream().map(c ->
+            CandidateResponse.builder()
+                .id(c.getId())
+                .name(c.getName())
+                .description(c.getDescription())
+                .imageUrl(c.getImageUrl())
+                .electionId(e.getId())
+                .build()
+        ).collect(Collectors.toList()));
+    }
+
     return ResponseEntity.ok(dto);
+  }
+
+  @GetMapping("/{electionId}/rounds")
+  public ResponseEntity<List<ElectionRound>> getRoundsByElection(@PathVariable Long electionId) {
+    List<ElectionRound> rounds = roundRepository.findByElectionId(electionId);
+    return ResponseEntity.ok(rounds);
+  }
+
+  @PostMapping("/{electionId}/rounds/{roundNumber}/process")
+  @Transactional
+  public ResponseEntity<?> processRound(@PathVariable Long electionId, @PathVariable Integer roundNumber) {
+    try {
+      Optional<com.nlu.electionservice.entity.ElectionRound> currentRoundOpt =
+          roundRepository.findByElectionIdAndRoundNumber(electionId, roundNumber);
+
+      if (currentRoundOpt.isEmpty()) {
+        return ResponseEntity.badRequest().body("Không tìm thấy vòng đấu yêu cầu.");
+      }
+
+      com.nlu.electionservice.entity.ElectionRound currentRound = currentRoundOpt.get();
+
+      currentRound.setStatus("CLOSED");
+      roundRepository.save(currentRound);
+
+      electionService.processRoundAfterClose(electionId, currentRound.getId());
+
+      Optional<com.nlu.electionservice.entity.ElectionRound> nextRoundOpt =
+          roundRepository.findByElectionIdAndRoundNumber(electionId, roundNumber + 1);
+
+      if (nextRoundOpt.isPresent()) {
+        com.nlu.electionservice.entity.ElectionRound nextRound = nextRoundOpt.get();
+        nextRound.setStatus("OPEN");
+        roundRepository.save(nextRound);
+
+        return ResponseEntity.ok(java.util.Map.of(
+            "message", "Đã chốt kết quả Vòng " + roundNumber + " và kích hoạt mở cổng Vòng " + (roundNumber + 1),
+            "nextRoundAvailable", true
+        ));
+      } else {
+        Election election = electionService.getById(electionId);
+        election.setStatus("ENDED");
+        electionRepository.save(election);
+
+        return ResponseEntity.ok(java.util.Map.of(
+            "message", "Đã hoàn thành cuộc bầu cử toàn cục! Đây là vòng đấu cuối cùng.",
+            "nextRoundAvailable", false
+        ));
+      }
+    } catch (Exception e) {
+      return ResponseEntity.status(500).body("Lỗi kết chuyển vòng đấu: " + e.getMessage());
+    }
+  }
+
+  @GetMapping("/{id}/results")
+  public ResponseEntity<List<CandidateResponse>> getResults(@PathVariable Long id) {
+    List<CandidateResponse> results = electionService.getElectionResults(id);
+    return ResponseEntity.ok(results);
+  }
+
+  @PostMapping("/{id}/synchronize-votes")
+  public ResponseEntity<?> synchronizeVotes(@PathVariable Long id) {
+    electionService.synchronizeVoteCounts(id);
+    return ResponseEntity.ok(java.util.Map.of("message", "Đồng bộ số phiếu thành công."));
   }
 }

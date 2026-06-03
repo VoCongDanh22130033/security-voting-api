@@ -9,7 +9,6 @@ import java.util.Optional;
 
 @Repository
 public interface VoterRepository extends JpaRepository<Voter, Long> {
-  // Truy vấn để lấy voter_id dựa trên email của User
-  @Query(value = "SELECT v.id FROM voters v JOIN users u ON v.user_id = u.id WHERE u.email = :email", nativeQuery = true)
+  @Query(value = "SELECT v.user_id FROM voters v JOIN users u ON v.user_id = u.id WHERE u.email = :email", nativeQuery = true)
   Optional<Long> findVoterIdByEmail(@Param("email") String email);
 }

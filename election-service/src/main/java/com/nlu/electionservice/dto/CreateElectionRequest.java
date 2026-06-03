@@ -19,6 +19,9 @@ public class CreateElectionRequest {
   // Danh sách ứng viên thêm nhanh thủ công
   private List<NewCandidateDto> newCandidates;
 
+  // Danh sách ứng viên cần cập nhật
+  private List<UpdateCandidateDto> updatedCandidates;
+
   // ====================================================================
   // 1. LỚP NỘI BỘ: CẤU HÌNH THỜI GIAN VÀ TIÊU CHÍ TỪNG VÒNG
   // ====================================================================
@@ -36,6 +39,18 @@ public class CreateElectionRequest {
   // ====================================================================
   @Data
   public static class NewCandidateDto {
+    private String name;
+    private String party;
+    private String description;
+    private String base64Image;
+  }
+
+  // ====================================================================
+  // 3. LỚP NỘI BỘ: THÔNG TIN ỨNG VIÊN CẦN CẬP NHẬT
+  // ====================================================================
+  @Data
+  public static class UpdateCandidateDto {
+    private Long id;
     private String name;
     private String party;
     private String description;

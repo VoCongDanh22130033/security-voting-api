@@ -76,7 +76,7 @@ public class CryptoController {
       );
 
       if (alreadySigned) {
-        return ResponseEntity.badRequest().body("Bạn đã nhận mã token chữ ký cho vòng này thuộc cuộc bầu cử này rồi, không thể xin thêm!");
+        return ResponseEntity.badRequest().body("Bạn Đã Bầu Cử Vòng Này RỒi !!!");
       }
 
       String blindedMsgStr = request.getBlindedMessage();

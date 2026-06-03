@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: election-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/election/**
+          filters:
+            - StripPrefix=1
 
 jwt:
   # Secret key phải đủ 32 ký tự cho thuật toán HS256

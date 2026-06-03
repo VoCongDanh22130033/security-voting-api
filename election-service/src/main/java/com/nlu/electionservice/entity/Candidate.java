@@ -25,8 +25,12 @@ public class Candidate {
   @Column(name = "image_url", columnDefinition = "LONGTEXT")
   private String imageUrl;
 
+  @Column(name = "vote_count")
+  private int voteCount;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "election_id", nullable = false)
+  @JsonIgnore
   private Election election;
 
 }
