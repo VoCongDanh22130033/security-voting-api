@@ -13,7 +13,7 @@ public class UsedToken {
   private Long id;
 
   @Column(name = "message_token", unique = true, nullable = false, length = 500)
-  private String messageToken; // Lưu token M để chống xài lại
+  private String messageToken;
 
   @Column(name = "round_id")
   private Long roundId;

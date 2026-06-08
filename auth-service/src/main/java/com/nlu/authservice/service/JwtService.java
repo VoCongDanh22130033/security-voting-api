@@ -40,11 +40,9 @@ public class JwtService {
     return extractAllClaims(token).get("role", String.class);
   }
 
-  //  Parse token (fix lỗi parserBuilder)
   private Claims extractAllClaims(String token) {
-    return Jwts.parserBuilder()
+    return Jwts.parser()
         .setSigningKey(getSignKey())
-        .build()
         .parseClaimsJws(token)
         .getBody();
   }

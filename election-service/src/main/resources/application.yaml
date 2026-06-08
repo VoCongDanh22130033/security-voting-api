@@ -8,9 +8,19 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: danhv5879@gmail.com
+    password: "hozq aayx vwvg gujz"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
   datasource:
-    # ĐÃ ĐỒNG BỘ: Chuyển serverTimezone từ UTC sang Asia/Ho_Chi_Minh và bọc thêm useLegacyDatetimeCode=false
-    url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&useLegacyDatetimeCode=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/e_voting_system?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&useLegacyDatetimeCode=false&allowPublicKeyRetrieval=true
     username: root
     password:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -27,3 +37,16 @@ cloudinary:
   cloud-name: dzi4yzwjk
   api-key: 571788156588531
   api-secret: xIxbTMdaX0Pc4RzE3kAgC2kDjMk
+
+# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Mở các endpoint cần thiết
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana

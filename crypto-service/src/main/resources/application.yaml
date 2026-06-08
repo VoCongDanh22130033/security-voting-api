@@ -17,3 +17,16 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+
+# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Mở các endpoint cần thiết
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana

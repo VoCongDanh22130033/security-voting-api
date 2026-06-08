@@ -32,3 +32,16 @@ Cloudinary:
   cloud-name: dzi4yzwjk
   api-key: 571788156588531
   api-secret: xIxbTMdaX0Pc4RzE3kAgC2kDjMk
+
+# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Mở các endpoint cần thiết
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana

@@ -1,12 +1,22 @@
 package com.nlu.electionservice.controller;
 
 import com.nlu.electionservice.dto.VoteAnonymousRequest;
+import com.nlu.electionservice.dto.VoteE2ERequest;
 import com.nlu.electionservice.entity.Election;
+import com.nlu.electionservice.entity.ElectionVoterInvite;
+import com.nlu.electionservice.entity.User;
 import com.nlu.electionservice.repository.AnonymousVoteRepository;
+import com.nlu.electionservice.repository.BlindSignatureLogRepository;
 import com.nlu.electionservice.repository.ElectionRepository;
-import com.nlu.electionservice.repository.VoteRepository;
 import com.nlu.electionservice.repository.ElectionRoundRepository;
+import com.nlu.electionservice.repository.ElectionVoterRepository;
+import com.nlu.electionservice.repository.UserRepository;
+import com.nlu.electionservice.repository.VoteRepository;
 import com.nlu.electionservice.service.ElectionService;
+import com.nlu.electionservice.service.ElectionParticipantInviteService;
+import com.nlu.electionservice.service.KafkaProducerService;
+import com.nlu.electionservice.service.VoteService;
+import java.util.HashMap;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -19,11 +29,14 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/votes")
+@RequestMapping("/api/v1/votes")
 public class VoteController {
 
   @Autowired
   private ElectionService electionService;
+  
+  @Autowired
+  private VoteService voteService;
 
   @Autowired
   private VoteRepository voteRepository;
@@ -37,15 +50,98 @@ public class VoteController {
   @Autowired
   private AnonymousVoteRepository anonymousVoteRepository;
 
+  @Autowired
+  private UserRepository userRepository;
+
+  @Autowired
+  private BlindSignatureLogRepository blindSignatureLogRepository;
+
+  @Autowired
+  private ElectionVoterRepository electionVoterRepository;
+
+  @Autowired
+  private KafkaProducerService auditLogger;
+
+  @Autowired
+  private ElectionParticipantInviteService participantInviteService;
+
   private final RestTemplate restTemplate = new RestTemplate();
   private final String CRYPTO_PUBLIC_KEY_URL = "http://localhost:8084/api/crypto/public-key";
+  private final String CRYPTO_SIGN_URL = "http://localhost:8084/api/crypto/sign-e2e";
+
+  @PostMapping("/cast-e2e")
+  public ResponseEntity<?> castE2EVote(
+      @RequestBody VoteE2ERequest request,
+      @RequestHeader(value = "X-User-Email", required = false) String email) {
+      try {
+          // BÆ°á»›c 1: Kiá»ƒm tra xem ngÆ°á»i dÃ¹ng Ä‘Ã£ bá» phiáº¿u vÃ²ng nÃ y chÆ°a
+          User user;
+          String auditEmail = email;
+          if (request.getInviteToken() != null && !request.getInviteToken().isBlank()) {
+              ElectionVoterInvite invite = participantInviteService.resolveVerifiedInvite(
+                  request.getInviteToken(),
+                  request.getElectionId(),
+                  request.getRoundId());
+              user = userRepository.findById(invite.getVoterId())
+                  .orElseThrow(() -> new RuntimeException("Nguoi tham gia khong hop le."));
+              auditEmail = invite.getEmail();
+          } else {
+              if (email == null || email.isBlank()) {
+                  return ResponseEntity.status(401).body("Vui long dang nhap hoac xac thuc bang link moi.");
+              }
+              user = userRepository.findByEmail(email)
+                  .orElseThrow(() -> new RuntimeException("Nguoi dung khong hop le."));
+          }
+
+          if (electionVoterRepository.countByElectionIdAndVoterId(request.getElectionId(), user.getId()) == 0) {
+              return ResponseEntity.status(403).body("Ban khong nam trong danh sach nhan vien duoc tham gia cuoc bau cu nay.");
+          }
+
+          boolean hasVoted = blindSignatureLogRepository.existsByUserIdAndElectionIdAndRoundId(
+              user.getId(),
+              request.getElectionId(),
+              request.getRoundId()
+          );
+
+          if (hasVoted) {
+              return ResponseEntity.badRequest().body("Báº¡n Ä‘Ã£ bá» phiáº¿u cho vÃ²ng nÃ y rá»“i.");
+          }
+
+          // BÆ°á»›c 2: Gá»­i blind token Ä‘áº¿n crypto-service Ä‘á»ƒ kÃ½
+          ResponseEntity<HashMap> signResponse = restTemplate.postForEntity(
+              CRYPTO_SIGN_URL,
+              Map.of("blindToken", request.getBlindToken()),
+              HashMap.class
+          );
+          if (signResponse.getBody() == null || !signResponse.getBody().containsKey("signedBlindToken")) {
+              return ResponseEntity.status(500).body("Lá»—i khi kÃ½ token.");
+          }
+
+          BigInteger signedBlindToken = new BigInteger(
+              (String) signResponse.getBody().get("signedBlindToken"), 16);
+
+          // BÆ°á»›c 3: Gá»i VoteService Ä‘á»ƒ xá»­ lÃ½ logic bá» phiáº¿u E2E
+          String receiptCode = voteService.castE2EVote(request, signedBlindToken, user.getId());
+          auditLogger.sendAuditEvent(auditEmail, "VOTE_CAST_SUCCESS",
+              "User cast vote for election ID " + request.getElectionId() + ", round ID " + request.getRoundId());
+
+          // Tráº£ vá» mÃ£ biÃªn nháº­n cho ngÆ°á»i dÃ¹ng
+          return ResponseEntity.ok(Map.of(
+              "message", "Bá» phiáº¿u thÃ nh cÃ´ng! LÃ¡ phiáº¿u cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c ghi láº¡i.",
+              "receiptCode", receiptCode
+          ));
+
+      } catch (Exception e) {
+          auditLogger.sendAuditEvent(email != null ? email : "invite-voter", "VOTE_CAST_FAILED", "Vote failed: " + e.getMessage());
+          return ResponseEntity.badRequest().body("Lá»—i trong quÃ¡ trÃ¬nh bá» phiáº¿u: " + e.getMessage());
+      }
+  }
 
   @PostMapping("/submit-anonymous")
   public ResponseEntity<?> submitVote(@RequestBody VoteAnonymousRequest request) {
     try {
-      System.out.println(">>> [BE Election] Nhận yêu cầu bỏ phiếu nặc danh cho RoundID: " + request.getRoundId());
+      System.out.println(">>> [BE Election] Nháº­n yÃªu cáº§u bá» phiáº¿u náº·c danh cho RoundID: " + request.getRoundId());
       
-      // Sửa lỗi unchecked operations
       ResponseEntity<Map<String, String>> response = restTemplate.exchange(
           CRYPTO_PUBLIC_KEY_URL,
           HttpMethod.GET,
@@ -55,7 +151,7 @@ public class VoteController {
       Map<String, String> keyParams = response.getBody();
 
       if (keyParams == null || !keyParams.containsKey("modulus") || !keyParams.containsKey("exponent")) {
-        throw new RuntimeException("Không thể kết nối lấy khóa bảo mật hệ thống từ dịch vụ mã hóa!");
+        throw new RuntimeException("KhÃ´ng thá»ƒ káº¿t ná»‘i láº¥y khÃ³a báº£o máº­t há»‡ thá»‘ng tá»« dá»‹ch vá»¥ mÃ£ hÃ³a!");
       }
 
       BigInteger N = new BigInteger(keyParams.get("modulus").trim(), 16);
@@ -63,9 +159,9 @@ public class VoteController {
 
       electionService.submitAnonymousVote(request, N, E);
 
-      return ResponseEntity.ok(Map.of("message", "Bỏ phiếu thành công! Phiếu đã được lưu nặc danh."));
+      return ResponseEntity.ok(Map.of("message", "Bá» phiáº¿u thÃ nh cÃ´ng! Phiáº¿u Ä‘Ã£ Ä‘Æ°á»£c lÆ°u náº·c danh."));
     } catch (Exception e) {
-      System.err.println(">>> [BE Election ERROR] Lỗi xử lý hòm phiếu: " + e.getMessage());
+      System.err.println(">>> [BE Election ERROR] Lá»—i xá»­ lÃ½ hÃ²m phiáº¿u: " + e.getMessage());
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
@@ -75,7 +171,7 @@ public class VoteController {
       @RequestParam("electionId") Long electionId,
       @RequestParam("roundId") Long roundId) {
     try {
-      System.out.println(">>> [BE Election] Tổng hợp kết quả hòm phiếu cho ElectionID: " + electionId + ", RoundID: " + roundId);
+      System.out.println(">>> [BE Election] Tá»•ng há»£p káº¿t quáº£ hÃ²m phiáº¿u cho ElectionID: " + electionId + ", RoundID: " + roundId);
 
       List<Map<String, Object>> rawStats = voteRepository.countVotesByCandidate(electionId, roundId);
       List<Map<String, Object>> voteStats = new java.util.ArrayList<>();
@@ -90,7 +186,7 @@ public class VoteController {
       }
 
       Map<String, Object> cleanElectionInfo = new java.util.HashMap<>();
-      String roundTitleDisplay = "Bầu cử vòng " + roundId;
+      String roundTitleDisplay = "Báº§u cá»­ vÃ²ng " + roundId;
 
       try {
         Optional<Election> electionOpt = electionRepository.findById(electionId);
@@ -109,12 +205,12 @@ public class VoteController {
           }
         } else {
           cleanElectionInfo.put("id", electionId);
-          cleanElectionInfo.put("title", "Cuộc bầu cử số #" + electionId);
+          cleanElectionInfo.put("title", "Cuá»™c báº§u cá»­ sá»‘ #" + electionId);
           cleanElectionInfo.put("status", "CLOSED");
         }
       } catch (Exception ex) {
         cleanElectionInfo.put("id", electionId);
-        cleanElectionInfo.put("title", "Cuộc bầu cử số #" + electionId);
+        cleanElectionInfo.put("title", "Cuá»™c báº§u cá»­ sá»‘ #" + electionId);
         cleanElectionInfo.put("status", "CLOSED");
       }
 
@@ -125,7 +221,7 @@ public class VoteController {
 
       return ResponseEntity.ok(responsePayload);
     } catch (Exception e) {
-      return ResponseEntity.status(500).body("Lỗi xử lý kết quả kiểm phiếu: " + e.getMessage());
+      return ResponseEntity.status(500).body("Lá»—i xá»­ lÃ½ káº¿t quáº£ kiá»ƒm phiáº¿u: " + e.getMessage());
     }
   }
 
@@ -134,22 +230,22 @@ public class VoteController {
     try {
       Optional<Election> electionOpt = electionRepository.findById(electionId);
       if (electionOpt.isEmpty()) {
-        return ResponseEntity.badRequest().body("Không tìm thấy cuộc bầu cử");
+        return ResponseEntity.badRequest().body("KhÃ´ng tÃ¬m tháº¥y cuá»™c báº§u cá»­");
       }
 
       Election election = electionOpt.get();
       if (!("CLOSED".equals(election.getStatus()) || "ENDED".equals(election.getStatus()))) {
-        return ResponseEntity.badRequest().body("Cuộc bầu cử chưa kết thúc");
+        return ResponseEntity.badRequest().body("Cuá»™c báº§u cá»­ chÆ°a káº¿t thÃºc");
       }
 
       Long winnerId = election.getWinnerId();
       if (winnerId == null) {
-        return ResponseEntity.badRequest().body("Cuộc bầu cử chưa có kết quả chính thức");
+        return ResponseEntity.badRequest().body("Cuá»™c báº§u cá»­ chÆ°a cÃ³ káº¿t quáº£ chÃ­nh thá»©c");
       }
 
       var finalRoundOpt = roundRepository.findByElectionIdAndRoundNumber(electionId, election.getTotalRounds());
       if (finalRoundOpt.isEmpty()) {
-        return ResponseEntity.badRequest().body("Không tìm thấy vòng cuối cùng");
+        return ResponseEntity.badRequest().body("KhÃ´ng tÃ¬m tháº¥y vÃ²ng cuá»‘i cÃ¹ng");
       }
 
       Long finalRoundId = finalRoundOpt.get().getId();
@@ -192,7 +288,8 @@ public class VoteController {
 
       return ResponseEntity.ok(announcement);
     } catch (Exception e) {
-      return ResponseEntity.status(500).body("Lỗi công bố kết quả: " + e.getMessage());
+      return ResponseEntity.status(500).body("Lá»—i cÃ´ng bá»‘ káº¿t quáº£: " + e.getMessage());
     }
   }
 }
+

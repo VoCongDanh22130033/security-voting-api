@@ -10,7 +10,6 @@ import java.util.Optional;
 public interface VerificationTokenRepository extends JpaRepository<VerificationToken, Long> {
 
   Optional<VerificationToken> findByToken(String token);
-
   // Tìm kiếm token theo user (dùng khi muốn xóa token cũ để gửi lại mã mới)
   Optional<VerificationToken> findByUser(User user);
 }

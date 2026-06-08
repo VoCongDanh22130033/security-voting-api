@@ -1,6 +1,7 @@
 package com.nlu.electionservice.entity;
 
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -31,7 +32,10 @@ public class User {
   private String email;
   private String phone;
   private String image_url;
+  @Column(name = "is_verified")
   private boolean isVerified;
+  @Column(name = "is_lock")
+  private Integer isLock;
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(
       name = "user_roles",

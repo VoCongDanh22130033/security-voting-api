@@ -27,7 +27,7 @@
     <module>voter-service</module>
     <module>election-service</module>
     <module>crypto-service</module>
-    <!-- <module>election-service</module> -->
+    <module>audit-service</module>
   </modules>
 
   <!-- ✅ Java version chuẩn cho Spring Boot 3 -->
@@ -40,7 +40,6 @@
   <!-- ✅ Quản lý version dùng chung -->
   <dependencyManagement>
     <dependencies>
-
       <!-- Spring Cloud -->
       <dependency>
         <groupId>org.springframework.cloud</groupId>
@@ -56,20 +55,39 @@
         <artifactId>jjwt-api</artifactId>
         <version>${jjwt.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-jackson</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
 
+      <!-- Actuator & Prometheus -->
+      <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-actuator</artifactId>
+          <version>3.2.5</version>
+      </dependency>
+      <dependency>
+          <groupId>io.micrometer</groupId>
+          <artifactId>micrometer-registry-prometheus</artifactId>
+          <version>1.12.5</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
   <!-- ✅ Plugin dùng chung -->
   <build>
     <plugins>
-
       <!-- Spring Boot Plugin -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
-
     </plugins>
   </build>
 

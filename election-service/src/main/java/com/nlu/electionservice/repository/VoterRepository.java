@@ -11,4 +11,9 @@ import java.util.Optional;
 public interface VoterRepository extends JpaRepository<Voter, Long> {
   @Query(value = "SELECT v.user_id FROM voters v JOIN users u ON v.user_id = u.id WHERE u.email = :email", nativeQuery = true)
   Optional<Long> findVoterIdByEmail(@Param("email") String email);
+
+  @Query(value = "SELECT v.* FROM voters v JOIN users u ON v.user_id = u.id WHERE u.email = :email LIMIT 1", nativeQuery = true)
+  Optional<Voter> findByEmail(@Param("email") String email);
+
+  Optional<Voter> findByCitizenId(String citizenId);
 }

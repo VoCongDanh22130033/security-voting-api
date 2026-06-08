@@ -35,6 +35,21 @@ public class CryptoController {
     return ResponseEntity.ok(rsaService.getPublicKeyParams());
   }
 
+  @PostMapping("/sign-e2e")
+  public ResponseEntity<?> signE2EMessage(@RequestBody Map<String, String> payload) {
+      try {
+          String blindedMsgStr = payload.get("blindToken");
+          if (blindedMsgStr == null || blindedMsgStr.trim().isEmpty()) {
+              return ResponseEntity.badRequest().body("blindToken không được rỗng!");
+          }
+          BigInteger blindedMessage = new BigInteger(blindedMsgStr, 16);
+          BigInteger signature = blindSignatureService.signBlindedMessage(blindedMessage);
+          return ResponseEntity.ok(Map.of("signedBlindToken", signature.toString(16)));
+      } catch (Exception e) {
+          return ResponseEntity.internalServerError().body("Lỗi khi ký token: " + e.getMessage());
+      }
+  }
+
   @PostMapping("/sign")
   public ResponseEntity<?> signMessage(
       @RequestBody BlindRequest request,
@@ -76,7 +91,7 @@ public class CryptoController {
       );
 
       if (alreadySigned) {
-        return ResponseEntity.badRequest().body("Bạn Đã Bầu Cử Vòng Này RỒi !!!");
+        return ResponseEntity.badRequest().body("Bạn Đã Bầu Cử Vòng Này RỒI !!!");
       }
 
       String blindedMsgStr = request.getBlindedMessage();

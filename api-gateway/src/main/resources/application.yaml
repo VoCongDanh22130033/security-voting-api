@@ -7,13 +7,34 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: election-service
+        - id: election-service-old
           uri: http://localhost:8083
           predicates:
             - Path=/election/**
           filters:
             - StripPrefix=1
+        - id: election-service-v1
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/**
+        - id: audit-service
+          uri: http://localhost:8085 # Port của audit-service
+          predicates:
+            - Path=/api/audit/**
 
 jwt:
   # Secret key phải đủ 32 ký tự cho thuật toán HS256
   secret: mysecretkey123456789mysecretkey123456789
+
+# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Mở các endpoint cần thiết
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana

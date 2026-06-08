@@ -3,22 +3,32 @@ package com.nlu.electionservice.service;
 import com.nlu.electionservice.dto.CandidateResponse;
 import com.nlu.electionservice.dto.CreateElectionRequest;
 import com.nlu.electionservice.dto.CreateElectionRequest.RoundTimeSettingDto;
+import com.nlu.electionservice.dto.RoundCandidateInfo;
+import com.nlu.electionservice.dto.RoundDetailDto;
 import com.nlu.electionservice.entity.Candidate;
+import com.nlu.electionservice.entity.Department;
 import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.entity.ElectionRound;
+import com.nlu.electionservice.entity.PublicBulletinBoard;
 import com.nlu.electionservice.entity.RoundCandidate;
 import com.nlu.electionservice.entity.UsedToken;
 import com.nlu.electionservice.entity.Vote;
 import com.nlu.electionservice.repository.CandidateRepository;
+import com.nlu.electionservice.repository.DepartmentRepository;
 import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.repository.ElectionRoundRepository;
+import com.nlu.electionservice.repository.ElectionVoterRepository;
+import com.nlu.electionservice.repository.PublicBulletinBoardRepository;
 import com.nlu.electionservice.repository.RoundCandidateRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,20 +36,47 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ElectionService {
+  
+  private final ElectionRepository electionRepository;
+  private final com.cloudinary.Cloudinary cloudinary;
+  private final CandidateRepository candidateRepository;
+  private final RoundCandidateRepository roundCandidateRepository;
+  private final ElectionRoundRepository roundRepository;
+  private final com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository;
+  private final com.nlu.electionservice.repository.VoteRepository voteRepository;
+  private final HomomorphicEncryptionService encryptionService;
+  private final PublicBulletinBoardRepository publicBulletinBoardRepository;
+  private final DepartmentRepository departmentRepository;
+  private final ElectionVoterRepository electionVoterRepository;
+  private final ElectionParticipantInviteService participantInviteService;
+
+
   @Autowired
-  private ElectionRepository electionRepository;
-  @Autowired
-  private com.cloudinary.Cloudinary cloudinary;
-  @Autowired
-  private CandidateRepository candidateRepository;
-  @Autowired
-  private RoundCandidateRepository roundCandidateRepository;
-  @Autowired
-  private ElectionRoundRepository roundRepository;
-  @Autowired
-  private com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository;
-  @Autowired
-  private com.nlu.electionservice.repository.VoteRepository voteRepository;
+  public ElectionService(ElectionRepository electionRepository, 
+                         com.cloudinary.Cloudinary cloudinary, 
+                         CandidateRepository candidateRepository, 
+                         RoundCandidateRepository roundCandidateRepository, 
+                         ElectionRoundRepository roundRepository, 
+                         com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository, 
+                          com.nlu.electionservice.repository.VoteRepository voteRepository, 
+                          HomomorphicEncryptionService encryptionService, 
+                          PublicBulletinBoardRepository publicBulletinBoardRepository,
+                          DepartmentRepository departmentRepository,
+                          ElectionVoterRepository electionVoterRepository,
+                          ElectionParticipantInviteService participantInviteService) {
+      this.electionRepository = electionRepository;
+      this.cloudinary = cloudinary;
+      this.candidateRepository = candidateRepository;
+      this.roundCandidateRepository = roundCandidateRepository;
+      this.roundRepository = roundRepository;
+      this.usedTokenRepository = usedTokenRepository;
+      this.voteRepository = voteRepository;
+      this.encryptionService = encryptionService;
+      this.publicBulletinBoardRepository = publicBulletinBoardRepository;
+      this.departmentRepository = departmentRepository;
+      this.electionVoterRepository = electionVoterRepository;
+      this.participantInviteService = participantInviteService;
+  }
 
   @Transactional
   public void processRoundAfterClose(Long electionId, Long roundId) {
@@ -104,8 +141,16 @@ public class ElectionService {
         rc.setCandidateId(cid);
         roundCandidateRepository.save(rc);
       }
-      nextRound.setStatus("OPEN");
+      boolean nextRoundStarted = nextRound.getStartTime() == null || !LocalDateTime.now().isBefore(nextRound.getStartTime());
+      nextRound.setStatus(nextRoundStarted ? "OPEN" : "UPCOMING");
       roundRepository.save(nextRound);
+      if (nextRoundStarted) {
+        try {
+          participantInviteService.sendRoundInvitations(electionId, nextRound.getRoundNumber());
+        } catch (Exception inviteEx) {
+          throw new RuntimeException("Da mo vong tiep theo nhung khong gui duoc email moi: " + inviteEx.getMessage(), inviteEx);
+        }
+      }
     } else {
       if (!advancing.isEmpty()) {
         parentElection.setWinnerId(advancing.get(0));
@@ -199,6 +244,8 @@ public class ElectionService {
     election.setTitle(request.getTitle());
     election.setDescription(request.getDescription());
     election.setTotalRounds(request.getTotalRounds());
+    configureElectionAudience(election, request);
+    validateRoundAdvancement(request);
 
     String electionRawBase64 = request.getBase64Image();
     if (electionRawBase64 != null && !electionRawBase64.trim().isEmpty() && !electionRawBase64.startsWith("http")) {
@@ -264,6 +311,7 @@ public class ElectionService {
             }
 
             round.setTitle(roundSetting.getTitle());
+            round.setDescription(roundSetting.getDescription());
             round.setStartTime(roundSetting.getStartTime());
             round.setEndTime(roundSetting.getEndTime());
             round.setMaxAdvanceCount(roundSetting.getMaxAdvanceCount() != null ? roundSetting.getMaxAdvanceCount() : 1);
@@ -318,7 +366,9 @@ public class ElectionService {
         }
     }
     
-    return electionRepository.save(election);
+    Election savedElection = electionRepository.save(election);
+    assignEligibleVoters(savedElection);
+    return savedElection;
   }
 
   @Transactional
@@ -393,6 +443,15 @@ public class ElectionService {
     election.setDescription(request.getDescription());
     election.setTotalRounds(request.getTotalRounds());
     election.setIsDelete(1);
+    configureElectionAudience(election, request);
+
+    // E2EV: Tạo khóa ElGamal cho cuộc bầu cử
+    validateRoundAdvancement(request);
+    HomomorphicEncryptionService.ElGamalKeyPair keyPair = encryptionService.generateKeyPair(1024);
+    election.setElGamalP(keyPair.p.toString(16));
+    election.setElGamalG(keyPair.g.toString(16));
+    election.setElGamalH(keyPair.h.toString(16));
+    election.setElGamalX(keyPair.x.toString(16));
 
     String electionRawBase64 = request.getBase64Image();
     if (electionRawBase64 != null && !electionRawBase64.trim().isEmpty()) {
@@ -420,6 +479,12 @@ public class ElectionService {
     }
 
     final Election savedElection = electionRepository.save(election);
+    // E2EV: Lưu Public Key lên Bulletin Board
+    PublicBulletinBoard pbb = new PublicBulletinBoard();
+    pbb.setElectionId(savedElection.getId());
+    pbb.setEventType("ELECTION_CREATED_PUBLIC_KEY");
+    pbb.setPayload("{\"p\":\"" + keyPair.p.toString(16) + "\",\"g\":\"" + keyPair.g.toString(16) + "\",\"h\":\"" + keyPair.h.toString(16) + "\"}");
+    publicBulletinBoardRepository.save(pbb);
 
     if (request.getRoundsTimeSettings() != null) {
       for (CreateElectionRequest.RoundTimeSettingDto roundSetting : request.getRoundsTimeSettings()) {
@@ -427,6 +492,7 @@ public class ElectionService {
         round.setElection(savedElection);
         round.setRoundNumber(roundSetting.getRoundNumber());
         round.setTitle(roundSetting.getTitle());
+        round.setDescription(roundSetting.getDescription());
         round.setStartTime(roundSetting.getStartTime());
         round.setEndTime(roundSetting.getEndTime());
         round.setMaxAdvanceCount(roundSetting.getMaxAdvanceCount() != null ? roundSetting.getMaxAdvanceCount() : 1);
@@ -450,8 +516,26 @@ public class ElectionService {
               newCand.setParty(newCandDto.getParty());
               newCand.setDescription(newCandDto.getDescription());
               newCand.setElection(savedElection);
-              // ... image upload logic for new candidates
+              
+              // SỬA LỖI Ở ĐÂY: Bổ sung lại logic upload ảnh
+              String rawBase64 = newCandDto.getBase64Image();
+              if (rawBase64 != null && !rawBase64.trim().isEmpty()) {
+                  try {
+                      String cleanBase64Data = rawBase64.contains(",") ? rawBase64.split(",")[1] : rawBase64;
+                      byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64Data.trim().replaceAll("\\s+", ""));
+                      java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
+                      newCand.setImageUrl((String) uploadResult.get("url"));
+                  } catch (Exception e) {
+                      System.err.println("Lỗi upload ảnh ứng viên: " + e.getMessage());
+                      newCand.setImageUrl("");
+                  }
+              } else {
+                  newCand.setImageUrl("");
+              }
+
+              // Lưu ứng viên MỚI vào database
               candidateRepository.save(newCand);
+
               RoundCandidate rc = new RoundCandidate();
               rc.setRound(savedRound);
               rc.setCandidateId(newCand.getId());
@@ -463,5 +547,153 @@ public class ElectionService {
     }
 
     return savedElection;
+  }
+
+  private void validateRoundAdvancement(CreateElectionRequest request) {
+    int totalCandidates = 0;
+    if (request.getCandidateIds() != null) {
+      totalCandidates += request.getCandidateIds().size();
+    }
+    if (request.getNewCandidates() != null) {
+      totalCandidates += request.getNewCandidates().size();
+    }
+
+    if (totalCandidates < 2) {
+      throw new IllegalArgumentException("Tong so ung vien vong 1 phai tu 2 nguoi tro len.");
+    }
+
+    if (request.getTotalRounds() == null || request.getTotalRounds() < 1) {
+      throw new IllegalArgumentException("So vong bau cu khong hop le.");
+    }
+
+    if (request.getRoundsTimeSettings() == null || request.getRoundsTimeSettings().isEmpty()) {
+      return;
+    }
+
+    List<RoundTimeSettingDto> sortedRounds = new ArrayList<>(request.getRoundsTimeSettings());
+    sortedRounds.sort(Comparator.comparing(RoundTimeSettingDto::getRoundNumber));
+
+    int availableCandidates = totalCandidates;
+    for (RoundTimeSettingDto roundSetting : sortedRounds) {
+      Integer roundNumber = roundSetting.getRoundNumber();
+      if (roundNumber == null || roundNumber >= request.getTotalRounds()) {
+        continue;
+      }
+
+      if (availableCandidates <= 1) {
+        throw new IllegalArgumentException(
+            "Vong " + roundNumber + " chi con " + availableCandidates + " ung vien, khong the tao them vong tiep theo.");
+      }
+
+      Integer maxAdvanceCount = roundSetting.getMaxAdvanceCount();
+      if (maxAdvanceCount == null || maxAdvanceCount < 1) {
+        throw new IllegalArgumentException(
+            "So ung vien lot vao Vong " + (roundNumber + 1) + " phai lon hon 0.");
+      }
+
+      if (maxAdvanceCount >= availableCandidates) {
+        throw new IllegalArgumentException(
+            "Vong " + roundNumber + " dang co " + availableCandidates
+                + " ung vien, so ung vien lot vao Vong " + (roundNumber + 1)
+                + " bat buoc phai nho hon " + availableCandidates + ".");
+      }
+
+      availableCandidates = maxAdvanceCount;
+    }
+  }
+
+  private void configureElectionAudience(Election election, CreateElectionRequest request) {
+    if ("DEPARTMENT_SPECIFIC".equalsIgnoreCase(request.getAudienceType())) {
+      if (request.getDepartmentIds() == null || request.getDepartmentIds().isEmpty()) {
+        throw new RuntimeException("Vui long chon it nhat mot phong ban duoc tham gia bau cu.");
+      }
+
+      List<Department> departments = departmentRepository.findAllById(request.getDepartmentIds());
+      if (departments.size() != request.getDepartmentIds().size()) {
+        throw new RuntimeException("Danh sach phong ban tham gia bau cu khong hop le.");
+      }
+
+      election.setAudienceType(Election.AudienceType.DEPARTMENT_SPECIFIC);
+      election.setTargetDepartments(new java.util.HashSet<>(departments));
+      return;
+    }
+
+    election.setAudienceType(Election.AudienceType.COMPANY_WIDE);
+    election.getTargetDepartments().clear();
+  }
+
+  private void assignEligibleVoters(Election election) {
+    electionVoterRepository.deleteByElectionId(election.getId());
+    if (Election.AudienceType.DEPARTMENT_SPECIFIC.equals(election.getAudienceType())) {
+      List<Long> departmentIds = election.getTargetDepartments().stream()
+          .map(Department::getId)
+          .collect(Collectors.toList());
+      if (!departmentIds.isEmpty()) {
+        electionVoterRepository.insertDepartmentEligibleVoters(election.getId(), departmentIds);
+      }
+      return;
+    }
+
+    electionVoterRepository.insertCompanyWideEligibleVoters(election.getId());
+  }
+
+  @Transactional(readOnly = true)
+  public List<RoundDetailDto> getElectionDetailsWithRounds(Long electionId) {
+    List<ElectionRound> rounds = roundRepository.findByElectionId(electionId);
+    rounds.sort(Comparator.comparing(ElectionRound::getRoundNumber));
+
+    List<RoundDetailDto> roundDetails = new ArrayList<>();
+
+    for (int i = 0; i < rounds.size(); i++) {
+        ElectionRound currentRound = rounds.get(i);
+        List<Candidate> candidatesForRound = candidateRepository.findAllByRoundId(currentRound.getId());
+        Map<Long, Long> voteCounts = new HashMap<>();
+
+        if (!"UPCOMING".equals(currentRound.getStatus())) {
+            List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, currentRound.getId());
+            stats.forEach(stat -> voteCounts.put(((Number) stat.get("candidateId")).longValue(), ((Number) stat.get("voteCount")).longValue()));
+        }
+
+        Set<Long> advancingCandidateIds = Collections.emptySet();
+        if ("CLOSED".equals(currentRound.getStatus()) && (i + 1) < rounds.size()) {
+            ElectionRound nextRound = rounds.get(i + 1);
+            advancingCandidateIds = roundCandidateRepository.findByRoundId(nextRound.getId()).stream()
+                                          .map(RoundCandidate::getCandidateId)
+                                          .collect(Collectors.toSet());
+        }
+
+        final Set<Long> finalAdvancingIds = advancingCandidateIds;
+        List<RoundCandidateInfo> candidateInfos = candidatesForRound.stream()
+            .map(c -> {
+                Boolean isAdvanced = null;
+                if ("CLOSED".equals(currentRound.getStatus())) {
+                    isAdvanced = finalAdvancingIds.contains(c.getId());
+                }
+                return RoundCandidateInfo.builder()
+                    .id(c.getId())
+                    .name(c.getName())
+                    .description(c.getDescription())
+                    .imageUrl(c.getImageUrl())
+                    .voteCount(voteCounts.getOrDefault(c.getId(), 0L))
+                    .isAdvanced(isAdvanced)
+                    .build();
+            })
+            .sorted(Comparator.comparing(RoundCandidateInfo::getVoteCount).reversed())
+            .collect(Collectors.toList());
+
+        roundDetails.add(RoundDetailDto.builder()
+            .id(currentRound.getId())
+            .roundNumber(currentRound.getRoundNumber())
+            .title(currentRound.getTitle())
+            .description(currentRound.getDescription())
+            .startTime(currentRound.getStartTime())
+            .endTime(currentRound.getEndTime())
+            .status(currentRound.getStatus())
+            .maxAdvanceCount(currentRound.getMaxAdvanceCount())
+            .candidates(candidateInfos)
+            .build());
+    }
+
+    return roundDetails;
   }
 }

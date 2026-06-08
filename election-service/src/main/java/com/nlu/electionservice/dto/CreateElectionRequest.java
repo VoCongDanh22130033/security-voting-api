@@ -11,6 +11,12 @@ public class CreateElectionRequest {
   private String description;
   private Integer totalRounds;
   private String base64Image;
+  
+  // --- Thêm cấu hình đối tượng ---
+  private String audienceType; // "COMPANY_WIDE" hoặc "DEPARTMENT_SPECIFIC"
+  private List<Long> departmentIds; // Danh sách ID phòng ban nếu chọn DEPARTMENT_SPECIFIC
+  // -------------------------------
+
   // Danh sách cấu hình thời gian & số người thắng của từng vòng từ FE truyền lên
   private List<RoundTimeSettingDto> roundsTimeSettings;
 
@@ -32,6 +38,7 @@ public class CreateElectionRequest {
     private LocalDateTime endTime;
     private Integer maxAdvanceCount;
     private String title;
+    private String description;
   }
 
   // ====================================================================

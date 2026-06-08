@@ -21,6 +21,8 @@ public class CreateElectionWithCandidatesRequest {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private Integer maxAdvanceCount;
+    private String title;
+    private String description;
 
   }
 }

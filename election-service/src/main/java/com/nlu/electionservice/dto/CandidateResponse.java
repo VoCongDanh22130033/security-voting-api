@@ -15,5 +15,5 @@ public class CandidateResponse {
   private String description;
   private String imageUrl;
   private Long electionId;
-  private Long voteCount; // Sửa từ long thành Long
+  private Long voteCount;
 }

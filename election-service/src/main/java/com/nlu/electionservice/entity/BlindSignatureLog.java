@@ -18,6 +18,17 @@ public class BlindSignatureLog {
   @Column(name = "election_id")
   private Long electionId;
 
-  @Column(name = "used_at", insertable = false, updatable = false)
+  @Column(name = "round_id")
+  private Long roundId;
+
+  @Column(name = "created_at", updatable = false)
+  private LocalDateTime createdAt;
+
+  @Column(name = "used_at")
   private LocalDateTime usedAt;
+
+  @PrePersist
+  protected void onCreate() {
+    createdAt = LocalDateTime.now();
+  }
 }

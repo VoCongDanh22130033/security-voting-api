@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,30 +21,42 @@ public class ElectionScheduler {
 
   @Autowired
   private ElectionRoundRepository roundRepository;
+  
   @Autowired
   private com.nlu.electionservice.service.ElectionService electionService;
 
+  @Autowired
+  private ElectionParticipantInviteService participantInviteService;
+
   @Scheduled(fixedRate = 5000)
-  @Transactional
   public void autoOpenElectionsAndRounds() {
     LocalDateTime now = LocalDateTime.now();
 
-    List<Election> upcomingElections = electionRepository.findAllByStatusAndStartTimeBefore("UPCOMING", now);
-    if (!upcomingElections.isEmpty()) {
-      upcomingElections.forEach(election -> {
-        election.setStatus("OPEN");
-        log.info(">>> [SCHEDULER] Election ID: {} has been automatically opened.", election.getId());
-      });
-      electionRepository.saveAll(upcomingElections);
+    try {
+      List<Election> upcomingElections = electionRepository.findAllByStatusAndStartTimeBefore("UPCOMING", now);
+      if (!upcomingElections.isEmpty()) {
+        upcomingElections.forEach(election -> {
+          election.setStatus("OPEN");
+          log.info(">>> [SCHEDULER] Election ID: {} has been automatically opened.", election.getId());
+        });
+        electionRepository.saveAll(upcomingElections);
+      }
+    } catch (Exception e) {
+      log.error("Error while opening elections: {}", e.getMessage());
     }
 
     try {
-      List<ElectionRound> upcomingRounds = roundRepository.findByStatusAndStartTimeBefore("UPCOMING", now);
+      List<ElectionRound> upcomingRounds = roundRepository.findUpcomingRoundsByStatusAndStartTimeBefore("UPCOMING", now);
       if (!upcomingRounds.isEmpty()) {
         upcomingRounds.forEach(round -> {
           round.setStatus("OPEN");
           log.info(">>> [SCHEDULER] Round number {} of Election ID: {} has been automatically opened!",
               round.getRoundNumber(), round.getElection().getId());
+          try {
+            participantInviteService.sendRoundInvitations(round.getElection().getId(), round.getRoundNumber());
+          } catch (Exception inviteEx) {
+            log.error("Error sending round invitations: {}", inviteEx.getMessage());
+          }
         });
         roundRepository.saveAll(upcomingRounds);
       }
@@ -55,37 +66,44 @@ public class ElectionScheduler {
   }
 
   @Scheduled(fixedRate = 5000)
-  @Transactional
   public void autoCloseElectionsAndRounds() {
     LocalDateTime now = LocalDateTime.now();
 
     try {
-      List<ElectionRound> activeRounds = roundRepository.findByStatusAndEndTimeBefore("OPEN", now);
+      List<ElectionRound> activeRounds = roundRepository.findActiveRoundsByStatusAndEndTimeBefore("OPEN", now);
       if (!activeRounds.isEmpty()) {
         for (ElectionRound round : activeRounds) {
           round.setStatus("CLOSED");
           log.info(">>> [SCHEDULER] Round number {} of Election ID: {} has ended.",
               round.getRoundNumber(), round.getElection().getId());
+          roundRepository.save(round);
           try {
             electionService.processRoundAfterClose(round.getElection().getId(), round.getId());
           } catch (Exception ex) {
             log.error("Error processing round results: {}", ex.getMessage());
           }
         }
-        roundRepository.saveAll(activeRounds);
       }
     } catch (Exception e) {
       log.error("Error while closing rounds: {}", e.getMessage());
     }
 
-    List<Election> expiredElections = electionRepository.findAllByStatusAndEndTimeBefore("OPEN", now);
-    if (!expiredElections.isEmpty()) {
-      expiredElections.forEach(election -> {
-        election.setStatus("CLOSED");
-        log.info(">>> [SCHEDULER] Election ID: {} has been automatically closed.", election.getId());
-        electionService.determineElectionWinner(election.getId());
-      });
-      electionRepository.saveAll(expiredElections);
+    try {
+      List<Election> expiredElections = electionRepository.findAllByStatusAndEndTimeBefore("OPEN", now);
+      if (!expiredElections.isEmpty()) {
+        expiredElections.forEach(election -> {
+          election.setStatus("CLOSED");
+          log.info(">>> [SCHEDULER] Election ID: {} has been automatically closed.", election.getId());
+          electionRepository.save(election);
+          try {
+            electionService.determineElectionWinner(election.getId());
+          } catch (Exception ex) {
+            log.error("Error determining election winner: {}", ex.getMessage());
+          }
+        });
+      }
+    } catch (Exception e) {
+      log.error("Error while closing elections: {}", e.getMessage());
     }
   }
 }

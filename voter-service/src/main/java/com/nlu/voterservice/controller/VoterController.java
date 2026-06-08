@@ -1,16 +1,24 @@
 package com.nlu.voterservice.controller;
 
-
-import com.nlu.voterservice.dto.ResetPasswordWithOtpRequest;
-import com.nlu.voterservice.entity.Voter;
 import com.nlu.voterservice.dto.ForgotPasswordRequest;
-
+import com.nlu.voterservice.dto.ResetPasswordWithOtpRequest;
 import com.nlu.voterservice.dto.UpdateProfileRequest;
+import com.nlu.voterservice.entity.Voter;
+import com.nlu.voterservice.service.AuditLogClient;
 import com.nlu.voterservice.service.VoterService;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/voter")
@@ -19,6 +27,8 @@ public class VoterController {
   @Autowired
   private VoterService voterService;
 
+  @Autowired
+  private AuditLogClient auditLogClient;
 
   @GetMapping("/profile")
   public ResponseEntity<?> getProfile(@RequestHeader("X-User-Email") String email) {
@@ -26,7 +36,6 @@ public class VoterController {
       Voter voter = voterService.findByEmail(email);
       return ResponseEntity.ok(voter);
     } catch (Exception e) {
-
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
@@ -36,15 +45,10 @@ public class VoterController {
       @RequestHeader("X-User-Email") String email,
       @ModelAttribute UpdateProfileRequest request) {
     try {
-      System.out.println(">>> [BE] Tiếp nhận FormData cập nhật hồ sơ cho email: " + email);
-      System.out.println(
-          ">>> [BE] File avatar đi kèm: " + (request.getAvatar() != null ? request.getAvatar()
-              .getOriginalFilename() : "Không có"));
-
       Voter updatedVoter = voterService.updateProfile(email, request);
+      auditLogClient.log(email, "PROFILE_UPDATED", "User updated profile");
       return ResponseEntity.ok(updatedVoter);
     } catch (Exception e) {
-      System.err.println(">>> [BE] Lỗi cập nhật hồ sơ: " + e.getMessage());
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
@@ -53,7 +57,8 @@ public class VoterController {
   public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
     try {
       voterService.sendOtpForgotPassword(request.getEmail());
-      return ResponseEntity.ok(Map.of("message", "Mã OTP đã được gửi về Email của bạn."));
+      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_OTP_REQUESTED", "User requested password reset OTP");
+      return ResponseEntity.ok(Map.of("message", "Ma OTP da duoc gui ve email."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -63,7 +68,8 @@ public class VoterController {
   public ResponseEntity<?> resetPasswordWithOtp(@RequestBody ResetPasswordWithOtpRequest request) {
     try {
       voterService.resetPasswordWithOtp(request);
-      return ResponseEntity.ok(Map.of("message", "Đổi mật khẩu thành công!"));
+      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_SUCCESS", "User reset password with OTP");
+      return ResponseEntity.ok(Map.of("message", "Doi mat khau thanh cong."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -77,27 +83,33 @@ public class VoterController {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
+
   @PostMapping("/{id}/lock")
-  public ResponseEntity<?> lockVoterAccount(@PathVariable("id") Long id) {
+  public ResponseEntity<?> lockVoterAccount(
+      @PathVariable("id") Long id,
+      @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       voterService.lockAccount(id);
-      return ResponseEntity.ok(Map.of("message", "Tài khoản đã bị khóa."));
+      auditLogClient.log(actorEmail, "ACCOUNT_LOCKED", "Locked user account ID: " + id);
+      return ResponseEntity.ok(Map.of("message", "Tai khoan da bi khoa."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
 
   @PostMapping("/{id}/unlock")
-  public ResponseEntity<?> unlockVoterAccount(@PathVariable("id") Long id) {
+  public ResponseEntity<?> unlockVoterAccount(
+      @PathVariable("id") Long id,
+      @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       voterService.unlockAccount(id);
-      return ResponseEntity.ok(Map.of("message", "Tài khoản đã được mở khóa."));
+      auditLogClient.log(actorEmail, "ACCOUNT_UNLOCKED", "Unlocked user account ID: " + id);
+      return ResponseEntity.ok(Map.of("message", "Tai khoan da duoc mo khoa."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
 
-  //  (roleId: 2 = voter, 3 = nguoi chu tri) ---
   @GetMapping("/admin/list")
   public ResponseEntity<?> listByRole(@RequestParam("role") Long roleId) {
     try {
@@ -108,11 +120,14 @@ public class VoterController {
     }
   }
 
-  // --- ADMIN: Thay đổi role cho user ---
   @PostMapping("/admin/change-role/{id}")
-  public ResponseEntity<?> changeRole(@PathVariable("id") Long id, @RequestParam("role") Long roleId) {
+  public ResponseEntity<?> changeRole(
+      @PathVariable("id") Long id,
+      @RequestParam("role") Long roleId,
+      @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       Voter updated = voterService.changeUserRole(id, roleId);
+      auditLogClient.log(actorEmail, "ACCOUNT_ROLE_CHANGED", "Changed user ID " + id + " to role ID " + roleId);
       return ResponseEntity.ok(updated);
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -128,7 +143,6 @@ public class VoterController {
     }
   }
 
-  // (Role ID = 2)
   @GetMapping("/admin/voters")
   public ResponseEntity<?> getAllVoters() {
     try {

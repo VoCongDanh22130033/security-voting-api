@@ -18,8 +18,8 @@ public class ElectionRound {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "election_id", nullable = false)
-    @JsonBackReference // Giúp tránh vòng lặp vô hạn khi serialize JSON
-    @ToString.Exclude // Loại bỏ trường này khỏi hàm toString() để tránh lỗi
+    @JsonBackReference
+    @ToString.Exclude
     private Election election;
 
     @Column(name = "round_number", nullable = false)
@@ -27,6 +27,9 @@ public class ElectionRound {
 
     @Column(name = "title")
     private String title;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
 
     @Column(name = "start_time")
     private LocalDateTime startTime;

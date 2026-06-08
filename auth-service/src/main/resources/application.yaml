@@ -2,6 +2,8 @@ server:
   port: 8081
 
 spring:
+  application:
+    name: auth-service
   # Chuyển mail vào trong mục spring
   mail:
     host: smtp.gmail.com
@@ -16,7 +18,7 @@ spring:
             enable: true
 
   datasource:
-    url: jdbc:mysql://localhost:3306/e_voting_system
+    url: jdbc:mysql://localhost:3306/e_voting_system?useUnicode=true&characterEncoding=UTF-8
     username: root
     password:
 
@@ -28,3 +30,16 @@ spring:
 jwt:
   secret: mysecretkey123456789mysecretkey123456789
   expiration: 86400000
+
+# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus # Mở các endpoint cần thiết
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana

@@ -21,7 +21,6 @@ public class CandidateController {
     return ResponseEntity.ok(response);
   }
 
-  // Endpoint mới để lấy ứng viên theo vòng bầu cử cụ thể
   @GetMapping("/rounds/{roundId}/candidates")
   public ResponseEntity<List<CandidateResponse>> getCandidatesByRound(@PathVariable Long roundId) {
     List<CandidateResponse> response = candidateService.getCandidatesByRound(roundId);

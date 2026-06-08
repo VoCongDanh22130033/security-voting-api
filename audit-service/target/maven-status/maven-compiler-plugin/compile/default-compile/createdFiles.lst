@@ -1,0 +1,8 @@
+com\nlu\auditservice\entity\AuditLog.class
+com\nlu\auditservice\kafka\KafkaConsumerService.class
+com\nlu\auditservice\AuditServiceApplication.class
+com\nlu\auditservice\config\SecurityConfig.class
+com\nlu\auditservice\controller\AuditLogController.class
+com\nlu\auditservice\dto\AuditLogRequest.class
+com\nlu\auditservice\repository\AuditLogRepository.class
+com\nlu\auditservice\service\AuditLogService.class

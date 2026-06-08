@@ -17,13 +17,11 @@ public class RSAService {
   @Autowired
   private CryptoKeyRepository cryptoKeyRepository;
 
-  // Sử dụng ID mặc định 1L để đại diện cho cuộc bầu cử hiện tại
   private final Long DEFAULT_SYSTEM_ID = 1L;
 
   @PostConstruct
   public void init() {
     try {
-      // KIỂM TRA ĐỒNG BỘ: Nếu DB đã có khóa cũ, ép hệ thống nạp lại từ DB lên RAM, tuyệt đối không sinh ngẫu nhiên nữa
       if (cryptoKeyRepository.existsById(DEFAULT_SYSTEM_ID)) {
         System.out.println(">>> [Crypto System] Phát hiện khóa RSA cũ trong DB. Tiến hành khôi phục lên bộ nhớ RAM...");
 

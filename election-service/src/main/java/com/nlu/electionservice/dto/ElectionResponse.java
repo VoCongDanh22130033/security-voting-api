@@ -17,6 +17,12 @@ public class ElectionResponse {
   private String image;
   private Long winnerId;
   private Long currentRoundId;
+  private Integer currentRoundNumber;
+  private String currentRoundTitle;
+  private String audienceType;
+  private List<Long> targetDepartmentIds;
+  private List<String> targetDepartmentNames;
   private List<CandidateResponse> candidates;
-  private List<ElectionRound> rounds; // Thêm danh sách các vòng
+  private List<ElectionRound> rounds;
+  private List<RoundDetailDto> roundDetails;
 }

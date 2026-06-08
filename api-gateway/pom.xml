@@ -11,6 +11,11 @@
 
   <artifactId>api-gateway</artifactId>
 
+  <properties>
+    <!-- Ghi đè phiên bản JWT tại đây để đảm bảo tính nhất quán -->
+    <jjwt.version>0.11.5</jjwt.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -20,6 +25,16 @@
     <dependency>
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+
+    <!-- Thêm trực tiếp Actuator và Prometheus vào đây để đảm bảo -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-registry-prometheus</artifactId>
     </dependency>
 
     <!-- 🔥 JWT CHUẨN -->
