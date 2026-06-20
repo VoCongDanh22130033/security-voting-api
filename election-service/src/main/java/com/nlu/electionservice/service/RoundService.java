@@ -1,16 +1,21 @@
 package com.nlu.electionservice.service;
 
+import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.entity.ElectionRound;
 import com.nlu.electionservice.entity.RoundCandidate;
+import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.repository.ElectionRoundRepository;
 import com.nlu.electionservice.repository.RoundCandidateRepository;
 import com.nlu.electionservice.repository.VoteRepository;
 import java.time.LocalDateTime;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class RoundService {
 
@@ -18,10 +23,20 @@ public class RoundService {
   private ElectionRoundRepository roundRepository;
 
   @Autowired
+  private ElectionRepository electionRepository;
+
+  @Autowired
   private RoundCandidateRepository roundCandidateRepository;
 
   @Autowired
   private VoteRepository voteRepository;
+
+  @Autowired
+  @Lazy
+  private ElectionService electionService;
+
+  @Autowired
+  private ElectionParticipantInviteService participantInviteService;
 
   public List<ElectionRound> getRoundsForElection(Long electionId) {
     return roundRepository.findByElectionId(electionId);
@@ -31,9 +46,26 @@ public class RoundService {
   public ElectionRound startRound(Long roundId) {
     ElectionRound round = roundRepository.findById(roundId)
         .orElseThrow(() -> new RuntimeException("Không tìm thấy vòng bầu cử"));
-    round.setStatus("ACTIVE");
+    round.setStatus("OPEN");
     round.setStartTime(LocalDateTime.now());
-    return roundRepository.save(round);
+    ElectionRound saved = roundRepository.save(round);
+
+    // Set election OPEN nếu chưa
+    Long electionId = round.getElection().getId();
+    electionRepository.findById(electionId).ifPresent(election -> {
+      if (!"OPEN".equals(election.getStatus())) {
+        election.setStatus("OPEN");
+        electionRepository.save(election);
+      }
+    });
+
+    // Gửi email mời tham gia vòng mới
+    try {
+      participantInviteService.sendRoundInvitations(electionId, round.getRoundNumber());
+    } catch (Exception e) {
+      log.warn("Không gửi được email vòng {}: {}", round.getRoundNumber(), e.getMessage());
+    }
+    return saved;
   }
 
   @Transactional
@@ -42,7 +74,15 @@ public class RoundService {
         .orElseThrow(() -> new RuntimeException("Không tìm thấy vòng bầu cử"));
     round.setStatus("CLOSED");
     round.setEndTime(LocalDateTime.now());
-    return roundRepository.save(round);
+    ElectionRound saved = roundRepository.save(round);
+    // Giải mã phiếu, gửi email, broadcast kết quả sau khi đóng vòng
+    Long electionId = round.getElection().getId();
+    try {
+      electionService.processRoundAfterClose(electionId, roundId);
+    } catch (Exception e) {
+      log.warn("processRoundAfterClose lỗi vòng {}: {}", roundId, e.getMessage());
+    }
+    return saved;
   }
 
   public List<Map<String, Object>> tallyRound(Long electionId, Long roundId) {
@@ -92,6 +132,7 @@ public class RoundService {
     Optional<ElectionRound> nextRoundOpt = roundRepository.findByElectionIdAndRoundNumber(electionId, nextRoundNumber);
     if (nextRoundOpt.isPresent()) {
       ElectionRound nextRound = nextRoundOpt.get();
+      roundCandidateRepository.deleteAll(roundCandidateRepository.findByRoundId(nextRound.getId()));
       // create RoundCandidate entries for advanced candidates
       List<RoundCandidate> nextCandidates = new ArrayList<>();
       for (Long cid : advanced) {

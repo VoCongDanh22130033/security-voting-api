@@ -1,52 +1,81 @@
 server:
   port: 8083
+  tomcat:
+    threads:
+      max: 2000
+      min-spare: 200
+    accept-count: 2000
+    max-connections: 8192
+    connection-timeout: 30000
 
 spring:
   application:
     name: election-service
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: danhv5879@gmail.com
-    password: "hozq aayx vwvg gujz"
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
+      max-file-size: 30MB
+      max-request-size: 50MB
+  threads:
+    virtual:
+      enabled: true   # Project Loom: 1000+ concurrent requests với overhead tối thiểu
   datasource:
-    url: jdbc:mysql://localhost:3306/e_voting_system?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&useLegacyDatetimeCode=false&allowPublicKeyRetrieval=true
-    username: root
-    password:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
-
+    hikari:
+      connection-timeout: 60000
+      maximum-pool-size: 500
+      minimum-idle: 50
+      idle-timeout: 300000
+      max-lifetime: 600000
+      keepalive-time: 60000        # ping connection mỗi 60s, tránh MySQL đóng idle connection
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   jpa:
     hibernate:
-      ddl-auto: none
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
 
-cloudinary:
-  cloud-name: dzi4yzwjk
-  api-key: 571788156588531
-  api-secret: xIxbTMdaX0Pc4RzE3kAgC2kDjMk
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
 
-# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+cloudinary:
+  cloud_name: ${CLOUDINARY_CLOUD_NAME}
+  api_key: ${CLOUDINARY_API_KEY}
+  api_secret: ${CLOUDINARY_API_SECRET}
+
+app:
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN}
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  invite-email-enabled: true
+  load-test-skip-cccd: false
+  crypto-sign-enabled: true
+  vote-audit-enabled: true
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus # Mở các endpoint cần thiết
-  endpoint:
-    health:
-      show-details: always
+        include: health,info,prometheus
   metrics:
     tags:
-      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: INFO
+    com.nlu.electionservice: INFO

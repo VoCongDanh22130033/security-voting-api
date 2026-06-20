@@ -4,7 +4,9 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class JwtFilter implements Filter {
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -12,7 +14,7 @@ public class JwtFilter implements Filter {
     HttpServletRequest req = (HttpServletRequest) request;
     String user = req.getHeader("X-User");
 
-    System.out.println("DEBUG - Voter-Service nhận X-User: " + user); // Thêm dòng này
+    log.debug("DEBUG - Voter-Service nhan X-User: {}", user);
 
     if (user == null) {
       ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing identity");

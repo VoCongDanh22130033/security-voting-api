@@ -1,24 +1,41 @@
 server:
   port: 8084
+  tomcat:
+    threads:
+      max: 1200
+      min-spare: 100
+    accept-count: 1000
+    max-connections: 10000
 spring:
   application:
     name: crypto-service
+  threads:
+    virtual:
+      enabled: true
 
   datasource:
-    url: jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
-    username: root
-    password:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/e_voting_system?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
       ddl-auto: none
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
-# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
+app:
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN}
+
 management:
   endpoints:
     web:

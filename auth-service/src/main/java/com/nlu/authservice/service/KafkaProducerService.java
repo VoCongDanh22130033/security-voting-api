@@ -1,28 +1,36 @@
 package com.nlu.authservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
+
 import java.util.Map;
 
+@Slf4j
 @Service
 public class KafkaProducerService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final String AUDIT_SERVICE_URL = "http://localhost:8085/api/audit/log";
+    private static final String AUDIT_TOPIC = "audit-events";
+
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public void sendAuditEvent(String userEmail, String action, String details) {
         try {
             Map<String, String> payload = Map.of(
                 "serviceName", "auth-service",
-                "userEmail", userEmail,
+                "userEmail", userEmail != null ? userEmail : "unknown",
                 "action", action,
-                "details", details
+                "details", details != null ? details : ""
             );
-            // Gửi trực tiếp API thay vì dùng Kafka
-            restTemplate.postForEntity(AUDIT_SERVICE_URL, payload, Void.class);
-            System.out.println(">>> Đã ghi log hệ thống: " + action);
+            kafkaTemplate.send(AUDIT_TOPIC, objectMapper.writeValueAsString(payload));
+            log.info(">>> Đã gửi Kafka audit: {}", action);
         } catch (Exception e) {
-            System.err.println(">>> Lỗi khi ghi log hệ thống: " + e.getMessage());
+            log.error(">>> Lỗi khi gửi Kafka audit: {}", e.getMessage());
         }
     }
 }

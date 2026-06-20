@@ -3,11 +3,14 @@ package com.nlu.electionservice.controller;
 import com.nlu.electionservice.dto.CandidateResponse;
 import com.nlu.electionservice.entity.Candidate;
 import com.nlu.electionservice.service.CandidateService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/elections")
 public class CandidateController {
@@ -30,7 +33,7 @@ public class CandidateController {
   @GetMapping("/round/{roundId}")
   public ResponseEntity<?> getCandidatesByRoundId(@PathVariable Long roundId) {
     try {
-      System.out.println(">>> [BE Election] Lấy danh sách ứng viên hợp lệ cho Vòng đấu ID: " + roundId);
+      log.info(">>> [BE Election] Lấy danh sách ứng viên hợp lệ cho Vòng đầu ID: {}", roundId);
       List<Candidate> candidates = candidateService.getCandidatesByRoundId(roundId);
       return ResponseEntity.ok(candidates);
     } catch (Exception e) {
@@ -41,6 +44,17 @@ public class CandidateController {
   @GetMapping("/candidates/all")
   public ResponseEntity<List<Candidate>> getAllCandidates() {
     return ResponseEntity.ok(candidateService.getAllCandidates());
+  }
+
+  @PostMapping("/{electionId}/candidates/import")
+  public ResponseEntity<?> importCandidates(@PathVariable Long electionId,
+                                             @RequestParam("file") MultipartFile file) {
+    try {
+      List<Candidate> result = candidateService.importCandidatesFromExcel(electionId, file);
+      return ResponseEntity.ok(java.util.Map.of("message", "Import thành công " + result.size() + " ứng viên.", "count", result.size()));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
   }
 
 }

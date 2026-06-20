@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 public interface UserRepository extends JpaRepository<User, Long> {
   List<User> findAllByOrderByIdDesc();
   long countByRoles_Name(String roleName);
+  long countByIsLock(Integer isLock);
   Optional<User> findByEmail(String email);
   boolean existsByEmail(String email);
 }

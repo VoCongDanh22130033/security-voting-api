@@ -1,108 +1,123 @@
 package com.nlu.electionservice.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nlu.electionservice.dto.VoteE2ERequest;
-import com.nlu.electionservice.entity.Election;
-import com.nlu.electionservice.entity.EncryptedVote;
-import com.nlu.electionservice.entity.PublicBulletinBoard;
 import com.nlu.electionservice.entity.BlindSignatureLog;
 import com.nlu.electionservice.entity.Vote;
-import com.nlu.electionservice.repository.ElectionRepository;
-import com.nlu.electionservice.repository.EncryptedVoteRepository;
-import com.nlu.electionservice.repository.PublicBulletinBoardRepository;
 import com.nlu.electionservice.repository.BlindSignatureLogRepository;
+import com.nlu.electionservice.repository.CandidateRepository;
 import com.nlu.electionservice.repository.VoteRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.List;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
+@Slf4j
 @Service
 public class VoteService {
 
-    private final ElectionRepository electionRepository;
-    private final EncryptedVoteRepository encryptedVoteRepository;
-    private final PublicBulletinBoardRepository publicBulletinBoardRepository;
-    private final HomomorphicEncryptionService encryptionService;
     private final BlindSignatureLogRepository blindSignatureLogRepository;
     private final VoteRepository voteRepository;
+    private final CandidateRepository candidateRepository;
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${app.crypto-service-url:http://localhost:8084}")
+    private String cryptoServiceUrl;
+
+    @Value("${app.internal-service-token}")
+    private String internalToken;
 
     @Autowired
-    public VoteService(ElectionRepository electionRepository, 
-                       EncryptedVoteRepository encryptedVoteRepository, 
-                       PublicBulletinBoardRepository publicBulletinBoardRepository, 
-                       HomomorphicEncryptionService encryptionService,
-                       BlindSignatureLogRepository blindSignatureLogRepository,
-                       VoteRepository voteRepository) {
-        this.electionRepository = electionRepository;
-        this.encryptedVoteRepository = encryptedVoteRepository;
-        this.publicBulletinBoardRepository = publicBulletinBoardRepository;
-        this.encryptionService = encryptionService;
+    public VoteService(BlindSignatureLogRepository blindSignatureLogRepository,
+                       VoteRepository voteRepository,
+                       CandidateRepository candidateRepository) {
         this.blindSignatureLogRepository = blindSignatureLogRepository;
         this.voteRepository = voteRepository;
+        this.candidateRepository = candidateRepository;
     }
 
+    /**
+     * Ghi BlindSignatureLog và lưu phiếu bầu trong CÙNG một transaction.
+     */
     @Transactional
-    public String castE2EVote(VoteE2ERequest request, BigInteger signedBlindToken, Long userId) throws Exception {
-        // Bước 1: Lấy thông tin cuộc bầu cử và khóa công khai ElGamal
-        Election election = electionRepository.findById(request.getElectionId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử."));
+    public String markAndCastVote(Long userId, VoteE2ERequest request, BigInteger signedToken) throws Exception {
+        BlindSignatureLog logEntry = new BlindSignatureLog();
+        logEntry.setUserId(userId);
+        logEntry.setElectionId(request.getElectionId());
+        logEntry.setRoundId(request.getRoundId());
+        blindSignatureLogRepository.save(logEntry);
 
-        BigInteger p = new BigInteger(election.getElGamalP(), 16);
-        BigInteger g = new BigInteger(election.getElGamalG(), 16);
-        BigInteger h = new BigInteger(election.getElGamalH(), 16);
-
-        // Bước 2: Mã hóa lựa chọn của cử tri
-        BigInteger message = BigInteger.valueOf(request.getCandidateId());
-        HomomorphicEncryptionService.Ciphertext encryptedChoice = encryptionService.encrypt(message, p, g, h);
-
-        // Bước 3: Tạo mã biên nhận duy nhất
-        String receiptCode = generateReceiptCode(request.getElectionId(), encryptedChoice);
-
-        // Bước 4: Lưu lá phiếu đã mã hóa
-        EncryptedVote encryptedVote = new EncryptedVote();
-        encryptedVote.setElectionId(request.getElectionId());
-        encryptedVote.setReceiptCode(receiptCode);
-        encryptedVote.setEncryptedChoice("{\"c1\":\"" + encryptedChoice.c1.toString(16) + "\",\"c2\":\"" + encryptedChoice.c2.toString(16) + "\"}");
-        encryptedVote.setCastTime(LocalDateTime.now());
-        encryptedVoteRepository.save(encryptedVote);
-
-        // Bước 5: Ghi lên Bảng Tin Công Khai
-        PublicBulletinBoard pbb = new PublicBulletinBoard();
-        pbb.setElectionId(request.getElectionId());
-        pbb.setEventType("VOTE_CAST");
-        pbb.setPayload(encryptedVote.getEncryptedChoice()); // Chỉ lưu bản mã, không lưu mã biên nhận
-        publicBulletinBoardRepository.save(pbb);
-
-        // ĐỂ TƯƠNG THÍCH VỚI LOGIC CŨ (Ví dụ: tính toán tiến trình bầu cử)
-        // Chúng ta vẫn tạo một bản ghi ảo trong bảng votes và blind_signature_logs
-        BlindSignatureLog log = new BlindSignatureLog();
-        log.setUserId(userId);
-        log.setElectionId(request.getElectionId());
-        log.setRoundId(request.getRoundId());
-        blindSignatureLogRepository.save(log);
+        String receiptCode = generateAnonymousReceipt(request);
 
         Vote vote = new Vote();
         vote.setElectionId(request.getElectionId());
         vote.setRoundId(request.getRoundId());
-        vote.setCandidateId(request.getCandidateId());
-        vote.setMessageToken(receiptCode); // Dùng receiptCode làm token tạm
-        vote.setSignature(signedBlindToken.toString(16));
-        voteRepository.save(vote);
+        vote.setMessageToken(receiptCode);
+        vote.setSignature(signedToken.toString(16));
 
-        // Bước 6: Trả về mã biên nhận cho cử tri
+        if (request.getEncryptedVote() != null && !request.getEncryptedVote().isBlank()) {
+            vote.setEncryptedVote(request.getEncryptedVote());
+            vote.setCandidateId(null);
+        } else {
+            vote.setCandidateId(request.getCandidateId());
+        }
+
+        voteRepository.save(vote);
         return receiptCode;
     }
 
-    private String generateReceiptCode(Long electionId, HomomorphicEncryptionService.Ciphertext ciphertext) throws NoSuchAlgorithmException {
+    /**
+     * Giải mã tất cả phiếu E2E của một vòng, gán candidateId và tăng voteCount.
+     * Gọi ngay trước khi tổng hợp kết quả vòng.
+     */
+    @Transactional
+    public void decryptRoundVotes(Long electionId, Long roundId) {
+        List<Vote> encryptedVotes = voteRepository
+            .findByElectionIdAndRoundIdAndEncryptedVoteIsNotNull(electionId, roundId);
+
+        if (encryptedVotes.isEmpty()) return;
+
+        String cryptoUrl = cryptoServiceUrl + "/api/crypto/decrypt-vote";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Internal-Token", internalToken);
+        headers.set("Content-Type", "application/json");
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        for (Vote vote : encryptedVotes) {
+            try {
+                HttpEntity<Map<String, String>> req = new HttpEntity<>(
+                    Map.of("encryptedVote", vote.getEncryptedVote(), "electionId", String.valueOf(electionId)), headers);
+                org.springframework.http.ResponseEntity<Map> res =
+                    restTemplate.postForEntity(cryptoUrl, req, Map.class);
+
+                if (res.getBody() != null && res.getBody().containsKey("plaintext")) {
+                    String plaintext = (String) res.getBody().get("plaintext");
+                    Map<String, Object> parsed = om.readValue(plaintext, Map.class);
+                    Long candidateId = Long.valueOf(parsed.get("candidateId").toString());
+                    vote.setCandidateId(candidateId);
+                    vote.setEncryptedVote(null);
+                    voteRepository.save(vote);
+                    candidateRepository.incrementVoteCount(candidateId);
+                }
+            } catch (Exception ex) {
+                log.error("[decryptRoundVotes] Loi giai ma vote id={}: {}", vote.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    private String generateAnonymousReceipt(VoteE2ERequest request) throws NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        String data = electionId + ciphertext.c1.toString(16) + ciphertext.c2.toString(16) + System.nanoTime();
-        byte[] hash = digest.digest(data.getBytes());
+        String data = request.getElectionId() + ":" + request.getRoundId() + ":"
+            + System.nanoTime() + ":" + java.util.UUID.randomUUID();
+        byte[] hash = digest.digest(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return new BigInteger(1, hash).toString(16);
     }
 }

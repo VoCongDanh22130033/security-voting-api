@@ -9,6 +9,7 @@ import com.nlu.voterservice.service.VoterService;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,8 +19,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequestMapping("/voter")
 public class VoterController {
@@ -33,8 +36,7 @@ public class VoterController {
   @GetMapping("/profile")
   public ResponseEntity<?> getProfile(@RequestHeader("X-User-Email") String email) {
     try {
-      Voter voter = voterService.findByEmail(email);
-      return ResponseEntity.ok(voter);
+      return ResponseEntity.ok(voterService.getProfileByEmail(email));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -45,9 +47,9 @@ public class VoterController {
       @RequestHeader("X-User-Email") String email,
       @ModelAttribute UpdateProfileRequest request) {
     try {
-      Voter updatedVoter = voterService.updateProfile(email, request);
-      auditLogClient.log(email, "PROFILE_UPDATED", "User updated profile");
-      return ResponseEntity.ok(updatedVoter);
+      java.util.Map<String, Object> updated = voterService.updateProfile(email, request);
+      auditLogClient.log(email, "PROFILE_UPDATED", "Cập nhật thông tin cá nhân");
+      return ResponseEntity.ok(updated);
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -57,9 +59,21 @@ public class VoterController {
   public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
     try {
       voterService.sendOtpForgotPassword(request.getEmail());
-      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_OTP_REQUESTED", "User requested password reset OTP");
-      return ResponseEntity.ok(Map.of("message", "Ma OTP da duoc gui ve email."));
+      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_OTP_REQUESTED", "Yêu cầu đặt lại mật khẩu qua OTP");
+      return ResponseEntity.ok(Map.of("message", "Mã OTP đã được gửi về email."));
     } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @PostMapping("/verify-otp")
+  public ResponseEntity<?> verifyOtp(@RequestBody Map<String, String> body) {
+    try {
+      log.info(">>> [verify-otp] email={} otp={}", body.get("email"), body.get("otpCode"));
+      voterService.verifyOtp(body.get("email"), body.get("otpCode"));
+      return ResponseEntity.ok(Map.of("message", "OTP hợp lệ."));
+    } catch (Exception e) {
+      log.error(">>> [verify-otp] ERROR: {} - {}", e.getClass().getName(), e.getMessage());
       return ResponseEntity.badRequest().body(e.getMessage());
     }
   }
@@ -68,8 +82,8 @@ public class VoterController {
   public ResponseEntity<?> resetPasswordWithOtp(@RequestBody ResetPasswordWithOtpRequest request) {
     try {
       voterService.resetPasswordWithOtp(request);
-      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_SUCCESS", "User reset password with OTP");
-      return ResponseEntity.ok(Map.of("message", "Doi mat khau thanh cong."));
+      auditLogClient.log(request.getEmail(), "PASSWORD_RESET_SUCCESS", "Đặt lại mật khẩu thành công");
+      return ResponseEntity.ok(Map.of("message", "Đổi mật khẩu thành công."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -90,8 +104,8 @@ public class VoterController {
       @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       voterService.lockAccount(id);
-      auditLogClient.log(actorEmail, "ACCOUNT_LOCKED", "Locked user account ID: " + id);
-      return ResponseEntity.ok(Map.of("message", "Tai khoan da bi khoa."));
+      auditLogClient.log(actorEmail, "ACCOUNT_LOCKED", "Khóa tài khoản người dùng ID: " + id);
+      return ResponseEntity.ok(Map.of("message", "Tài khoản đã bị khóa."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -103,8 +117,8 @@ public class VoterController {
       @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       voterService.unlockAccount(id);
-      auditLogClient.log(actorEmail, "ACCOUNT_UNLOCKED", "Unlocked user account ID: " + id);
-      return ResponseEntity.ok(Map.of("message", "Tai khoan da duoc mo khoa."));
+      auditLogClient.log(actorEmail, "ACCOUNT_UNLOCKED", "Mở khóa tài khoản người dùng ID: " + id);
+      return ResponseEntity.ok(Map.of("message", "Tài khoản đã được mở khóa."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
@@ -127,8 +141,21 @@ public class VoterController {
       @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
     try {
       Voter updated = voterService.changeUserRole(id, roleId);
-      auditLogClient.log(actorEmail, "ACCOUNT_ROLE_CHANGED", "Changed user ID " + id + " to role ID " + roleId);
+      auditLogClient.log(actorEmail, "ACCOUNT_ROLE_CHANGED", "Đổi vai trò người dùng ID " + id + " sang vai trò ID " + roleId);
       return ResponseEntity.ok(updated);
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
+  @DeleteMapping("/{id}")
+  public ResponseEntity<?> deleteUser(
+      @PathVariable("id") Long id,
+      @RequestHeader(value = "X-User-Email", required = false) String actorEmail) {
+    try {
+      voterService.deleteUser(id);
+      auditLogClient.log(actorEmail, "ACCOUNT_DELETED", "Xóa tài khoản người dùng ID: " + id);
+      return ResponseEntity.ok(Map.of("message", "Tài khoản đã được xóa thành công."));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }

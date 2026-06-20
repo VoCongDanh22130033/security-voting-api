@@ -3,10 +3,12 @@ package com.nlu.auditservice.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nlu.auditservice.dto.AuditLogRequest;
 import com.nlu.auditservice.service.AuditLogService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class KafkaConsumerService {
 
@@ -24,9 +26,9 @@ public class KafkaConsumerService {
         try {
             AuditLogRequest request = objectMapper.readValue(message, AuditLogRequest.class);
             auditLogService.logAction(request);
-            System.out.println("Consumed and logged audit event: " + request.getAction());
+            log.info("Consumed and logged audit event: {}", request.getAction());
         } catch (Exception e) {
-            System.err.println("Failed to consume audit event: " + e.getMessage());
+            log.error("Failed to consume audit event: {}", e.getMessage());
         }
     }
 }

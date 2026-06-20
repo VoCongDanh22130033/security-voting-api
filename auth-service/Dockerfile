@@ -1,14 +1,12 @@
-# Sử dụng một base image Java 17 chuẩn từ Eclipse Temurin
-FROM eclipse-temurin:17-jdk-focal
+FROM maven:3.9.9-eclipse-temurin-17 AS build
+WORKDIR /workspace
+COPY pom.xml .
+COPY auth-service/pom.xml auth-service/pom.xml
+COPY auth-service/src auth-service/src
+RUN mvn -f auth-service/pom.xml package -DskipTests
 
-# Đặt thư mục làm việc bên trong container
+FROM eclipse-temurin:17-jre
 WORKDIR /app
-
-# Sao chép file .jar đã được build từ thư mục target của Maven vào container
-COPY target/auth-service-0.0.1-SNAPSHOT.jar app.jar
-
-# Expose port mà ứng dụng sẽ chạy
+COPY --from=build /workspace/auth-service/target/auth-service-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8081
-
-# Lệnh để chạy ứng dụng khi container khởi động
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,40 +1,65 @@
 server:
   port: 8080
+  netty:
+    connection-timeout: 30000
+
+app:
+  gateway-request-logging-enabled: false
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN}
+
+services:
+  auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  voter-url: ${VOTER_SERVICE_URL:http://localhost:8082}
+  election-url: ${ELECTION_SERVICE_URL:http://localhost:8083}
+  crypto-url: ${CRYPTO_SERVICE_URL:http://localhost:8084}
+  audit-url: ${AUDIT_SERVICE_BASE_URL:http://localhost:8085}
+  notification-url: ${NOTIFICATION_SERVICE_BASE_URL:http://localhost:8086}
 
 spring:
   application:
     name: api-gateway
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+  codec:
+    max-in-memory-size: 52428800   # 50MB — cho phép upload ảnh base64 qua gateway
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: 30000
+        response-timeout: 120s
+        pool:
+          type: fixed
+          max-connections: 2000
+          acquire-timeout: 120000
       routes:
         - id: election-service-old
-          uri: http://localhost:8083
+          uri: ${ELECTION_SERVICE_URL:http://localhost:8083}
           predicates:
             - Path=/election/**
           filters:
             - StripPrefix=1
         - id: election-service-v1
-          uri: http://localhost:8083
+          uri: ${ELECTION_SERVICE_URL:http://localhost:8083}
           predicates:
             - Path=/api/v1/**
         - id: audit-service
-          uri: http://localhost:8085 # Port của audit-service
+          uri: ${AUDIT_SERVICE_BASE_URL:http://localhost:8085}
           predicates:
             - Path=/api/audit/**
 
 jwt:
-  # Secret key phải đủ 32 ký tự cho thuật toán HS256
-  secret: mysecretkey123456789mysecretkey123456789
+  secret: ${JWT_SECRET}
 
-# Cấu hình Spring Boot Actuator để expose metrics cho Prometheus
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus # Mở các endpoint cần thiết
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: always
   metrics:
     tags:
-      application: ${spring.application.name} # Gắn tên ứng dụng vào mọi metric để dễ lọc trong Grafana
+      application: ${spring.application.name}

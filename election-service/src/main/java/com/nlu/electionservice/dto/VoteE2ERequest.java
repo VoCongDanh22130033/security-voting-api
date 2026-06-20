@@ -15,5 +15,6 @@ public class VoteE2ERequest {
     private Long roundId;
     private String blindToken;
     private Long candidateId;
+    private String encryptedVote;
     private String inviteToken;
 }

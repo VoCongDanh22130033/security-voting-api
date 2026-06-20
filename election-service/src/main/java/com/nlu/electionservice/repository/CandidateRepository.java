@@ -2,6 +2,7 @@ package com.nlu.electionservice.repository;
 
 import com.nlu.electionservice.entity.Candidate;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -40,4 +41,8 @@ public interface CandidateRepository extends JpaRepository<Candidate, Long> {
 
   @Query("SELECT c FROM Candidate c JOIN RoundCandidate rc ON c.id = rc.candidateId WHERE rc.round.id = :roundId")
   List<Candidate> findAllByRoundId(@Param("roundId") Long roundId);
+
+  @Modifying
+  @Query(value = "UPDATE candidates SET vote_count = vote_count + 1 WHERE id = :candidateId", nativeQuery = true)
+  void incrementVoteCount(@Param("candidateId") Long candidateId);
 }

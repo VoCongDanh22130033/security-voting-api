@@ -1,0 +1,22 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AuthServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="auth-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.nlu.authservice.AuthServiceApplication" />
+    <envs>
+      <env name="DB_URL" value="jdbc:mysql://localhost:3306/e_voting_system?useUnicode=true&amp;characterEncoding=UTF-8&amp;useSSL=false&amp;serverTimezone=Asia/Ho_Chi_Minh&amp;allowPublicKeyRetrieval=true" />
+      <env name="DB_USERNAME" value="root" />
+      <env name="DB_PASSWORD" value="" />
+      <env name="JWT_SECRET" value="mysecretkey123456789mysecretkey123456789" />
+      <env name="MAIL_HOST" value="smtp.gmail.com" />
+      <env name="MAIL_PORT" value="587" />
+      <env name="MAIL_USER" value="danhv5879@gmail.com" />
+      <env name="MAIL_PASS" value="uaukgsqvcfzgkgkw" />
+      <env name="INTERNAL_SERVICE_TOKEN" value="a5518134e7b291a2903b1c2993799e0ed68058268621c52dec0534cb451c80d0" />
+      <env name="AUDIT_SERVICE_URL" value="http://localhost:8085/api/audit/log" />
+      <env name="FRONTEND_URL" value="http://localhost:5173" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

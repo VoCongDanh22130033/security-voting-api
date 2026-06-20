@@ -31,7 +31,7 @@ public class ApplicationConfig {
                                 .map(role -> new org.springframework.security.core.authority.SimpleGrantedAuthority(role.getName()))
                                 .collect(Collectors.toList())
                 ))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản với email: " + username));
     }
 
     @Bean

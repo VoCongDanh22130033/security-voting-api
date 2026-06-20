@@ -14,12 +14,10 @@ public class JwtService {
   @Value("${jwt.secret}")
   private String secret;
 
-  //  Tạo key 1 lần
   private Key getSignKey() {
     return Keys.hmacShaKeyFor(secret.getBytes());
   }
 
-  //  Generate token
   public String generateToken(String email, String role) {
     return Jwts.builder()
         .setSubject(email)
@@ -30,12 +28,10 @@ public class JwtService {
         .compact();
   }
 
-
   public String extractEmail(String token) {
     return extractAllClaims(token).getSubject();
   }
 
-  //  Extract role
   public String extractRole(String token) {
     return extractAllClaims(token).get("role", String.class);
   }
@@ -47,14 +43,19 @@ public class JwtService {
         .getBody();
   }
 
-  //  Check hết hạn
   public boolean isTokenExpired(String token) {
     return extractAllClaims(token).getExpiration().before(new Date());
   }
 
-  // Validate token
+  /** Trả về số ms còn lại trước khi token hết hạn (0 nếu đã hết hạn) */
+  public long getRemainingTtlMs(String token) {
+    Date expiration = extractAllClaims(token).getExpiration();
+    long remaining = expiration.getTime() - System.currentTimeMillis();
+    return Math.max(0, remaining);
+  }
+
   public boolean isValidToken(String token, String email) {
     final String extractedEmail = extractEmail(token);
-    return (extractedEmail.equals(email) && !isTokenExpired(token));
+    return extractedEmail.equals(email) && !isTokenExpired(token);
   }
 }

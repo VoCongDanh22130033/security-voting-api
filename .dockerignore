@@ -1,0 +1,6 @@
+**/target
+**/.idea
+**/.git
+**/.mvn
+**/mvnw
+**/mvnw.cmd

@@ -1,0 +1,25 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ElectionServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="election-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.nlu.electionservice.ElectionServiceApplication" />
+    <envs>
+      <env name="DB_URL" value="jdbc:mysql://localhost:3306/e_voting_system?useUnicode=true&amp;characterEncoding=UTF-8&amp;useSSL=false&amp;serverTimezone=Asia/Ho_Chi_Minh&amp;allowPublicKeyRetrieval=true" />
+      <env name="DB_USERNAME" value="root" />
+      <env name="DB_PASSWORD" value="" />
+      <env name="JWT_SECRET" value="mysecretkey123456789mysecretkey123456789" />
+      <env name="INTERNAL_SERVICE_TOKEN" value="a5518134e7b291a2903b1c2993799e0ed68058268621c52dec0534cb451c80d0" />
+      <env name="AUDIT_SERVICE_URL" value="http://localhost:8085/api/audit/log" />
+      <env name="AUDIT_SERVICE_BASE_URL" value="http://localhost:8085" />
+      <env name="CRYPTO_SERVICE_URL" value="http://localhost:8084" />
+      <env name="NOTIFICATION_SERVICE_BASE_URL" value="http://localhost:8086" />
+      <env name="FRONTEND_URL" value="http://localhost:5173" />
+      <env name="WEBSOCKET_ALLOWED_ORIGIN_PATTERNS" value="http://localhost:5173,http://127.0.0.1:5173" />
+      <env name="CLOUDINARY_CLOUD_NAME" value="dzi4yzwjk" />
+      <env name="CLOUDINARY_API_KEY" value="571788156588531" />
+      <env name="CLOUDINARY_API_SECRET" value="xIxbTMdaX0Pc4RzE3kAgC2kDjMk" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

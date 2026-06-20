@@ -2,14 +2,23 @@ package com.nlu.electionservice.service;
 
 import com.nlu.electionservice.dto.CandidateResponse;
 import com.nlu.electionservice.entity.Candidate;
+import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.entity.ElectionRound;
 import com.nlu.electionservice.repository.CandidateRepository;
+import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.repository.ElectionRoundRepository;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +33,9 @@ public class CandidateService {
 
   @Autowired
   private ElectionRoundRepository roundRepository;
+
+  @Autowired
+  private ElectionRepository electionRepository;
 
   private static final Logger log = LoggerFactory.getLogger(CandidateService.class);
 
@@ -92,5 +104,43 @@ public class CandidateService {
 
   public List<Candidate> getAllCandidates() {
       return candidateRepository.findAll();
+  }
+
+  public List<Candidate> importCandidatesFromExcel(Long electionId, MultipartFile file) {
+    Election election = electionRepository.findById(electionId)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử ID: " + electionId));
+
+    List<Candidate> imported = new ArrayList<>();
+    try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
+      Sheet sheet = workbook.getSheetAt(0);
+      for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+        Row row = sheet.getRow(i);
+        if (row == null) continue;
+        String name = getCellString(row.getCell(0));
+        if (name == null || name.isBlank()) continue;
+        String party       = getCellString(row.getCell(1));
+        String description = getCellString(row.getCell(2));
+
+        Candidate c = new Candidate();
+        c.setName(name.trim());
+        c.setParty(party != null ? party.trim() : "");
+        c.setDescription(description != null ? description.trim() : "");
+        c.setElection(election);
+        imported.add(candidateRepository.save(c));
+      }
+    } catch (Exception e) {
+      throw new RuntimeException("Lỗi đọc file Excel: " + e.getMessage());
+    }
+    log.info(">>> [BE] Đã import {} ứng viên cho election ID: {}", imported.size(), electionId);
+    return imported;
+  }
+
+  private String getCellString(Cell cell) {
+    if (cell == null) return null;
+    return switch (cell.getCellType()) {
+      case STRING  -> cell.getStringCellValue();
+      case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+      default      -> null;
+    };
   }
 }

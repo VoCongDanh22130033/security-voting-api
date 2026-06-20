@@ -27,6 +27,7 @@
     <module>voter-service</module>
     <module>election-service</module>
     <module>crypto-service</module>
+    <module>notification-service</module>
     <module>audit-service</module>
   </modules>
 

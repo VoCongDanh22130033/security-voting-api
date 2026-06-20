@@ -5,39 +5,65 @@ import com.cloudinary.utils.ObjectUtils;
 import com.nlu.voterservice.dto.ResetPasswordWithOtpRequest;
 import com.nlu.voterservice.dto.VoterResponse;
 import com.nlu.voterservice.entity.User;
-import com.nlu.voterservice.entity.VerificationToken;
 import com.nlu.voterservice.entity.Voter;
 import com.nlu.voterservice.dto.UpdateProfileRequest;
-import com.nlu.voterservice.repository.VerificationTokenRepository;
 import com.nlu.voterservice.repository.VoterRepository;
+import com.nlu.voterservice.repository.UserRepository;
 import com.nlu.voterservice.repository.RoleRepository;
-import java.time.LocalDateTime;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class VoterService {
 
   @Autowired
   private VoterRepository voterRepository;
   @Autowired
+  private UserRepository userRepository;
+  @Autowired
   private RoleRepository roleRepository;
   @Autowired
   private Cloudinary cloudinary;
 
   @Autowired
-  private VerificationTokenRepository tokenRepository;
-
-  @Autowired
   private JavaMailSender mailSender;
 
+  @Autowired
+  private RedisOtpService redisOtpService;
+
   private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+  public java.util.Map<String, Object> getProfileByEmail(String email) {
+    User user = userRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản: " + email));
+
+    String roleName = user.getRoles().stream()
+        .findFirst()
+        .map(r -> r.getName())
+        .orElse("ROLE_VOTER");
+
+    java.util.Map<String, Object> result = new java.util.HashMap<>();
+    result.put("fullName", user.getFullName());
+    result.put("email", user.getEmail());
+    result.put("phone", user.getPhone());
+    result.put("image_url", user.getImage_url());
+    result.put("role", roleName);
+
+    // Nếu là cử tri thì lấy thêm citizenId từ bảng voters
+    voterRepository.findByEmail(email).ifPresent(v -> {
+      result.put("citizenId", v.getCitizenId());
+    });
+
+    return result;
+  }
 
   public VoterResponse getProfile(String email) {
     Voter voter = voterRepository.findByEmail(email)
@@ -83,19 +109,12 @@ public class VoterService {
 
 
   @Transactional
-  public Voter updateProfile(String email, UpdateProfileRequest request) {
-    Voter voter = voterRepository.findByEmail(email)
-        .orElseThrow(() -> new RuntimeException("Không tìm thấy cử tri với email: " + email));
-
-
-    User user = voter.getUser();
-    if (user == null) {
-      throw new RuntimeException("Không tìm thấy tài khoản người dùng liên kết với cử tri này!");
-    }
+  public java.util.Map<String, Object> updateProfile(String email, UpdateProfileRequest request) {
+    User user = userRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản: " + email));
 
     if (request.getFullName() != null) {
       user.setFullName(request.getFullName());
-      voter.setFullName(request.getFullName());
     }
 
     if (request.getPhone() != null) {
@@ -104,90 +123,87 @@ public class VoterService {
 
     if (request.getAvatar() != null && !request.getAvatar().isEmpty()) {
       try {
-        System.out.println(">>> [BE] Đang tải ảnh đại diện lên Cloudinary cho tài khoản: " + email);
+        log.info(">>> [BE] Đang tải ảnh lên Cloudinary cho: {}", email);
         Map uploadResult = cloudinary.uploader().upload(
             request.getAvatar().getBytes(),
-            ObjectUtils.asMap(
-                "folder", "e_voting_avatars",
-                "resource_type", "image"
-            )
+            ObjectUtils.asMap("folder", "e_voting_avatars", "resource_type", "image")
         );
         String secureUrl = (String) uploadResult.get("secure_url");
         user.setImage_url(secureUrl);
-        System.out.println(">>> [BE] Đẩy Cloudinary thành công. URL: " + secureUrl);
+        log.info(">>> [BE] Cloudinary OK. URL: {}", secureUrl);
       } catch (Exception e) {
-        throw new RuntimeException("Thất bại khi xử lý upload ảnh: " + e.getMessage());
+        throw new RuntimeException("Thất bại khi upload ảnh: " + e.getMessage());
       }
     }
 
-    System.out.println(">>> [BE] Tiến hành Flush dữ liệu xuống MySQL cho cả bảng users và voters...");
+    userRepository.save(user);
 
-    return voterRepository.saveAndFlush(voter);
+    // Nếu là cử tri thì cập nhật fullName trong voters luôn
+    voterRepository.findByEmail(email).ifPresent(voter -> {
+      if (request.getFullName() != null) voter.setFullName(request.getFullName());
+      voterRepository.save(voter);
+    });
+
+    java.util.Map<String, Object> result = new java.util.HashMap<>();
+    result.put("fullName", user.getFullName());
+    result.put("email", user.getEmail());
+    result.put("phone", user.getPhone());
+    result.put("image_url", user.getImage_url());
+    return result;
   }
 
 
-public void sendOtpForgotPassword(String email) {
-  Voter voter = voterRepository.findByEmail(email)
-      .orElseThrow(() -> new RuntimeException("Email không tồn tại trong hệ thống!"));
+  public void sendOtpForgotPassword(String email) {
+    userRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Email không tồn tại trong hệ thống!"));
 
-  User user = voter.getUser();
+    if (!redisOtpService.checkAndSetRateLimit(email)) {
+      throw new RuntimeException("Vui lòng chờ 60 giây trước khi yêu cầu OTP mới!");
+    }
 
-  String otp = String.format("%06d", new java.util.Random().nextInt(999999));
+    String otp = String.format("%06d", new java.util.Random().nextInt(999999));
+    redisOtpService.saveOtp(email, otp);
 
-  this.saveNewOtpToken(user, otp);
-
-
-  try {
-    SimpleMailMessage message = new SimpleMailMessage();
-    message.setTo(email);
-    message.setSubject("[E-Voting System] Mã OTP Đặt Lại Mật Khẩu");
-    message.setText("Mã OTP của bạn là: " + otp + "\nMã này có hiệu lực trong vòng 5 phút.");
-
-    mailSender.send(message);
-    System.out.println(">>> [BE] Đã gửi mail thành công tới: " + email);
-  } catch (Exception e) {
-    System.err.println(">>> [BE] Lỗi khi gửi mail: " + e.getMessage());
-    throw new RuntimeException("Gửi mail thất bại nhưng mã xác thực đã được tạo!");
+    try {
+      SimpleMailMessage message = new SimpleMailMessage();
+      message.setTo(email);
+      message.setSubject("[E-Voting System] Mã OTP Đặt Lại Mật Khẩu");
+      message.setText("Mã OTP của bạn là: " + otp + "\nMã này có hiệu lực trong vòng 5 phút.");
+      mailSender.send(message);
+      log.info(">>> [BE] Đã gửi mail OTP tới: {}", email);
+    } catch (Exception e) {
+      log.error(">>> [BE] Lỗi khi gửi mail: {}", e.getMessage());
+      throw new RuntimeException("Không thể gửi email OTP. Vui lòng thử lại sau.");
+    }
   }
-}
 
-
-  @Transactional
-  public void saveNewOtpToken(User user, String otp) {
-    tokenRepository.deleteByUser(user);
-    tokenRepository.flush();
-
-    VerificationToken verificationToken = new VerificationToken();
-    verificationToken.setToken(otp);
-    verificationToken.setExpiryDate(LocalDateTime.now().plusMinutes(5));
-    verificationToken.setUser(user);
-
-    tokenRepository.saveAndFlush(verificationToken);
-    System.out.println(">>> [BE] Đã COMMIT vĩnh viễn OTP vào bảng verification_token cho User ID: " + user.getId());
+  public void verifyOtp(String email, String otpCode) {
+    String stored = redisOtpService.getOtp(email);
+    if (stored == null) {
+      throw new RuntimeException("Mã OTP đã hết hiệu lực hoặc không tồn tại!");
+    }
+    if (!stored.equals(otpCode)) {
+      throw new RuntimeException("Mã OTP không chính xác!");
+    }
   }
 
   @Transactional
   public void resetPasswordWithOtp(ResetPasswordWithOtpRequest request) {
-
-    VerificationToken verificationToken = (VerificationToken) tokenRepository.findByToken(request.getOtpCode())
-        .orElseThrow(() -> new RuntimeException("Mã OTP không chính xác!"));
-
-    if (!verificationToken.getUser().getEmail().equals(request.getEmail())) {
-      throw new RuntimeException("Mã OTP không khớp với tài khoản yêu cầu!");
-    }
-
-    if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-      tokenRepository.delete(verificationToken);
+    String stored = redisOtpService.getOtp(request.getEmail());
+    if (stored == null) {
       throw new RuntimeException("Mã OTP đã hết hiệu lực!");
     }
+    if (!stored.equals(request.getOtpCode())) {
+      throw new RuntimeException("Mã OTP không chính xác!");
+    }
 
-    User user = verificationToken.getUser();
+    User user = userRepository.findByEmail(request.getEmail())
+        .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản!"));
     user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+    userRepository.save(user);
 
-    voterRepository.save(voterRepository.findByEmail(request.getEmail()).get());
-
-    tokenRepository.delete(verificationToken);
-    System.out.println(">>> [BE] Đổi mật khẩu thành công, đã dọn dẹp bảng verification_token.");
+    redisOtpService.deleteOtp(request.getEmail());
+    log.info(">>> [BE] Đổi mật khẩu thành công cho: {}", request.getEmail());
   }
 
   public java.util.Map<String, Object> getVoterById(Long userId) {
@@ -251,7 +267,7 @@ public void sendOtpForgotPassword(String email) {
     if (rowsUpdated == 0) {
       throw new RuntimeException("Không tìm thấy tài khoản người dùng với id: " + userId);
     }
-    System.out.println(">>> [BE] Đã khóa tài khoản thành công cho User ID: " + userId);
+    log.info(">>> [BE] Đã khóa tài khoản thành công cho User ID: {}", userId);
   }
 
   @Transactional
@@ -264,7 +280,26 @@ public void sendOtpForgotPassword(String email) {
     if (rowsUpdated == 0) {
       throw new RuntimeException("Không tìm thấy tài khoản người dùng với id: " + userId);
     }
-    System.out.println(">>> [BE] Đã mở khóa tài khoản thành công cho User ID: " + userId);
+    log.info(">>> [BE] Đã mở khóa tài khoản thành công cho User ID: {}", userId);
+  }
+
+  @Transactional
+  public void deleteUser(Long userId) {
+    String checkSql = "SELECT COUNT(*) FROM users WHERE id = ?1";
+    jakarta.persistence.Query checkQuery = entityManager.createNativeQuery(checkSql);
+    checkQuery.setParameter(1, userId);
+    Number count = (Number) checkQuery.getSingleResult();
+    if (count.intValue() == 0) {
+      throw new RuntimeException("Không tìm thấy tài khoản người dùng với id: " + userId);
+    }
+    entityManager.createNativeQuery("DELETE FROM user_roles WHERE user_id = ?1").setParameter(1, userId).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM voters WHERE user_id = ?1").setParameter(1, userId).executeUpdate();
+    entityManager.createNativeQuery("DELETE FROM verification_tokens WHERE user_id = ?1").setParameter(1, userId).executeUpdate();
+    int rows = entityManager.createNativeQuery("DELETE FROM users WHERE id = ?1").setParameter(1, userId).executeUpdate();
+    if (rows == 0) {
+      throw new RuntimeException("Xóa tài khoản thất bại cho id: " + userId);
+    }
+    log.info(">>> [BE] Đã xóa tài khoản thành công cho User ID: {}", userId);
   }
 
   @jakarta.persistence.PersistenceContext

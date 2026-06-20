@@ -15,15 +15,24 @@ public interface ElectionRoundRepository extends JpaRepository<ElectionRound, Lo
 
   Optional<ElectionRound> findByElectionIdAndRoundNumber(Long electionId, Integer roundNumber);
 
-  @Query("SELECT er FROM ElectionRound er JOIN er.election e WHERE er.status = ?1 AND er.endTime < ?2 AND e.isDelete = 1")
+  @Query("SELECT er FROM ElectionRound er JOIN FETCH er.election e WHERE er.status = ?1 AND er.endTime < ?2 AND e.isDelete = 1")
   List<ElectionRound> findActiveRoundsByStatusAndEndTimeBefore(String status, LocalDateTime endTime);
 
-  @Query("SELECT er FROM ElectionRound er JOIN er.election e WHERE er.status = ?1 AND er.startTime < ?2 AND e.isDelete = 1")
+  @Query("SELECT er FROM ElectionRound er JOIN FETCH er.election e WHERE er.status = ?1 AND er.startTime < ?2 AND e.isDelete = 1")
   List<ElectionRound> findUpcomingRoundsByStatusAndStartTimeBefore(String status, LocalDateTime startTime);
 
   List<ElectionRound> findByStatusAndEndTimeBefore(String status, LocalDateTime endTime);
 
+  @Query("SELECT er FROM ElectionRound er JOIN FETCH er.election WHERE er.status = ?1 AND er.endTime BETWEEN ?2 AND ?3")
+  List<ElectionRound> findByStatusAndEndTimeBetween(String status, LocalDateTime startTime, LocalDateTime endTime);
+
   List<ElectionRound> findByStatusAndStartTimeBefore(String status, LocalDateTime startTime);
 
   Optional<ElectionRound> findByElectionIdAndStatus(Long electionId, String status);
+  @Query("SELECT er FROM ElectionRound er JOIN FETCH er.election e " +
+      "WHERE er.status = ?1 AND er.endTime <= ?2 AND e.isDelete = 1")
+  List<ElectionRound> findActiveRoundsByStatusAndEndTimeLessThanEqual(
+      String status,
+      LocalDateTime endTime
+  );
 }

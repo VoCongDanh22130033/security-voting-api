@@ -1,23 +1,26 @@
 package com.nlu.apigateway.config;
 
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
-import java.util.Arrays;
 import org.springframework.web.server.WebFilter;
 
 @Configuration
 public class CorsConfig {
+  @Value("${app.cors-allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+  private List<String> allowedOrigins;
+
   @Bean
   public CorsWebFilter corsWebFilter() {
     CorsConfiguration config = new CorsConfiguration();
     config.setAllowCredentials(true);
-    config.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
-    config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-User-Email"));
-    config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+    config.setAllowedOrigins(allowedOrigins);
+    config.setAllowedHeaders(List.of("*"));
+    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", config);

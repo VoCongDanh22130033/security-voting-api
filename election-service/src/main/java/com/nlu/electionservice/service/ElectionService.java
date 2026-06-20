@@ -6,19 +6,14 @@ import com.nlu.electionservice.dto.CreateElectionRequest.RoundTimeSettingDto;
 import com.nlu.electionservice.dto.RoundCandidateInfo;
 import com.nlu.electionservice.dto.RoundDetailDto;
 import com.nlu.electionservice.entity.Candidate;
-import com.nlu.electionservice.entity.Department;
 import com.nlu.electionservice.entity.Election;
 import com.nlu.electionservice.entity.ElectionRound;
-import com.nlu.electionservice.entity.PublicBulletinBoard;
 import com.nlu.electionservice.entity.RoundCandidate;
 import com.nlu.electionservice.entity.UsedToken;
 import com.nlu.electionservice.entity.Vote;
 import com.nlu.electionservice.repository.CandidateRepository;
-import com.nlu.electionservice.repository.DepartmentRepository;
 import com.nlu.electionservice.repository.ElectionRepository;
 import com.nlu.electionservice.repository.ElectionRoundRepository;
-import com.nlu.electionservice.repository.ElectionVoterRepository;
-import com.nlu.electionservice.repository.PublicBulletinBoardRepository;
 import com.nlu.electionservice.repository.RoundCandidateRepository;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -30,10 +25,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class ElectionService {
   
@@ -44,26 +43,24 @@ public class ElectionService {
   private final ElectionRoundRepository roundRepository;
   private final com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository;
   private final com.nlu.electionservice.repository.VoteRepository voteRepository;
-  private final HomomorphicEncryptionService encryptionService;
-  private final PublicBulletinBoardRepository publicBulletinBoardRepository;
-  private final DepartmentRepository departmentRepository;
-  private final ElectionVoterRepository electionVoterRepository;
   private final ElectionParticipantInviteService participantInviteService;
+  private final RealtimeNotificationService realtimeNotificationService;
+  private final VoteService voteService;
 
+  @Lazy @Autowired
+  private ElectionService self;
 
   @Autowired
-  public ElectionService(ElectionRepository electionRepository, 
-                         com.cloudinary.Cloudinary cloudinary, 
-                         CandidateRepository candidateRepository, 
-                         RoundCandidateRepository roundCandidateRepository, 
-                         ElectionRoundRepository roundRepository, 
-                         com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository, 
-                          com.nlu.electionservice.repository.VoteRepository voteRepository, 
-                          HomomorphicEncryptionService encryptionService, 
-                          PublicBulletinBoardRepository publicBulletinBoardRepository,
-                          DepartmentRepository departmentRepository,
-                          ElectionVoterRepository electionVoterRepository,
-                          ElectionParticipantInviteService participantInviteService) {
+  public ElectionService(ElectionRepository electionRepository,
+                         com.cloudinary.Cloudinary cloudinary,
+                         CandidateRepository candidateRepository,
+                         RoundCandidateRepository roundCandidateRepository,
+                         ElectionRoundRepository roundRepository,
+                         com.nlu.electionservice.repository.UsedTokenRepository usedTokenRepository,
+                          com.nlu.electionservice.repository.VoteRepository voteRepository,
+                          ElectionParticipantInviteService participantInviteService,
+                          RealtimeNotificationService realtimeNotificationService,
+                          VoteService voteService) {
       this.electionRepository = electionRepository;
       this.cloudinary = cloudinary;
       this.candidateRepository = candidateRepository;
@@ -71,48 +68,90 @@ public class ElectionService {
       this.roundRepository = roundRepository;
       this.usedTokenRepository = usedTokenRepository;
       this.voteRepository = voteRepository;
-      this.encryptionService = encryptionService;
-      this.publicBulletinBoardRepository = publicBulletinBoardRepository;
-      this.departmentRepository = departmentRepository;
-      this.electionVoterRepository = electionVoterRepository;
       this.participantInviteService = participantInviteService;
+      this.realtimeNotificationService = realtimeNotificationService;
+      this.voteService = voteService;
   }
 
-  @Transactional
-  public void processRoundAfterClose(Long electionId, Long roundId) {
-    ElectionRound round = roundRepository.findById(roundId)
-            .orElseThrow(() -> new RuntimeException("Round not found"));
+  /**
+   * Đóng trạng thái round trong transaction REQUIRES_NEW — commit ngay lập tức, độc lập
+   * với transaction ngoài. Trả về true nếu đây là lần đầu đóng (cần gửi email).
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public boolean tryCloseElection(Long electionId) {
+    Election e = electionRepository.findById(electionId).orElse(null);
+    if (e == null || "CLOSED".equals(e.getStatus())) return false;
+    e.setStatus("CLOSED");
+    electionRepository.save(e);
+    return true;
+  }
 
-    if (!"CLOSED".equals(round.getStatus())) {
-      round.setStatus("CLOSED");
-      roundRepository.save(round);
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public boolean tryCloseRound(Long roundId) {
+    ElectionRound r = roundRepository.findById(roundId).orElse(null);
+    if (r == null || "CLOSED".equals(r.getStatus())) return false;
+    r.setStatus("CLOSED");
+    roundRepository.save(r);
+    return true;
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void processRoundAfterClose(Long electionId, Long roundId) {
+    // Commit trạng thái CLOSED ngay trong REQUIRES_NEW — không bị rollback bởi transaction này
+    boolean shouldNotify = self.tryCloseRound(roundId);
+
+    ElectionRound round = roundRepository.findById(roundId)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy vòng bầu cử."));
+
+    if (shouldNotify) {
+      try {
+        realtimeNotificationService.roundClosed(round);
+        participantInviteService.sendRoundClosedEmails(electionId, round.getRoundNumber());
+      } catch (Exception notifyEx) {
+        log.error("Cảnh báo: Không gửi được thông báo/email đóng vòng {}: {}", round.getRoundNumber(), notifyEx.getMessage());
+      }
+    }
+
+    Election parentElection = round.getElection();
+    java.util.Optional<ElectionRound> nextRoundOpt = roundRepository.findByElectionIdAndRoundNumber(electionId, round.getRoundNumber() + 1);
+    boolean hasNextRound = nextRoundOpt.isPresent();
+
+    // Giải mã phiếu E2E trước khi tổng hợp — phiếu lưu với candidateId=null cần được gán đúng
+    try {
+      voteService.decryptRoundVotes(electionId, roundId);
+    } catch (Exception decryptEx) {
+      log.error("Cảnh báo: Không giải mã được phiếu E2E vòng {}: {}", roundId, decryptEx.getMessage());
     }
 
     List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, roundId);
+    Map<Long, Long> votesByCandidate = new HashMap<>();
 
     long totalVotes = 0;
     long highestVotes = 0;
     Long absoluteWinnerId = null;
 
-    if (!stats.isEmpty()) {
-        highestVotes = ((Number) stats.get(0).get("voteCount")).longValue();
-        absoluteWinnerId = ((Number) stats.get(0).get("candidateId")).longValue();
-        for (Map<String, Object> stat : stats) {
-            totalVotes += ((Number) stat.get("voteCount")).longValue();
+    for (Map<String, Object> stat : stats) {
+        Object cidObj = stat.get("candidateId");
+        Object vcObj = stat.get("voteCount");
+        if (cidObj == null || vcObj == null) continue;
+        Long candidateId = ((Number) cidObj).longValue();
+        Long voteCount = ((Number) vcObj).longValue();
+        votesByCandidate.put(candidateId, voteCount);
+        totalVotes += voteCount;
+        if (voteCount > highestVotes) {
+            highestVotes = voteCount;
+            absoluteWinnerId = candidateId;
         }
     }
 
-    boolean hasAbsoluteWinner = (totalVotes > 0 && highestVotes == totalVotes);
-
-    Election parentElection = round.getElection();
-    java.util.Optional<ElectionRound> nextRoundOpt = roundRepository.findByElectionIdAndRoundNumber(electionId, round.getRoundNumber() + 1);
+    boolean hasAbsoluteWinner = (!hasNextRound && totalVotes > 0 && highestVotes == totalVotes);
 
     if (hasAbsoluteWinner) {
-        System.out.println(">>> [CHIẾN THẮNG TUYỆT ĐỐI] Ứng viên ID " + absoluteWinnerId + " đã giành 100% phiếu bầu. Kết thúc bầu cử!");
+        log.info(">>> [CHIẾN THẮNG TUYỆT ĐỐI] Ứng viên ID {} đã giành 100% phiếu bầu. Kết thúc bầu cử!", absoluteWinnerId);
         parentElection.setWinnerId(absoluteWinnerId);
         parentElection.setStatus("CLOSED");
         electionRepository.save(parentElection);
-        
+
         if (nextRoundOpt.isPresent()) {
             List<ElectionRound> allRounds = roundRepository.findByElectionId(electionId);
             for (ElectionRound r : allRounds) {
@@ -122,33 +161,72 @@ public class ElectionService {
                 }
             }
         }
-        synchronizeVoteCounts(electionId);
+        try { synchronizeVoteCounts(electionId); } catch (Exception ex) {
+            log.error("Cảnh báo: Lỗi đồng bộ phiếu bầu {}: {}", electionId, ex.getMessage());
+        }
+        try { realtimeNotificationService.electionClosed(parentElection); } catch (Exception ex) {
+            log.error("Cảnh báo: Không gửi được thông báo đóng bầu cử {}: {}", electionId, ex.getMessage());
+        }
         return;
     }
 
-    int advance = round.getMaxAdvanceCount();
-    List<Long> advancing = stats.stream()
+    int advance = round.getMaxAdvanceCount() != null && round.getMaxAdvanceCount() > 0
+            ? round.getMaxAdvanceCount()
+            : 1;
+    List<RoundCandidate> currentRoundCandidates = roundCandidateRepository.findByRoundId(roundId);
+    List<Long> advancing = currentRoundCandidates.stream()
+            .map(RoundCandidate::getCandidateId)
+            .distinct()
+            .sorted(Comparator
+                    .comparing((Long candidateId) -> votesByCandidate.getOrDefault(candidateId, 0L)).reversed()
+                    .thenComparing(Long::longValue))
             .limit(advance)
-            .map(row -> ((Number) row.get("candidateId")).longValue())
             .collect(Collectors.toList());
 
-    if (nextRoundOpt.isPresent()) {
+    if (advancing.isEmpty()) {
+      advancing = stats.stream()
+              .map(row -> ((Number) row.get("candidateId")).longValue())
+              .limit(advance)
+              .collect(Collectors.toList());
+    }
+
+    if (advancing.isEmpty()) {
+      log.error("Không có ứng viên nào đủ điều kiện vào vòng tiếp theo - roundId={}, electionId={}", roundId, electionId);
+      throw new RuntimeException("Không thể chuyển vòng: không có ứng viên đủ điều kiện.");
+    }
+
+    if (hasNextRound) {
       ElectionRound nextRound = nextRoundOpt.get();
-      roundCandidateRepository.deleteAll(roundCandidateRepository.findByRoundId(nextRound.getId()));
-      for (Long cid : advancing) {
-        RoundCandidate rc = new RoundCandidate();
-        rc.setRound(nextRound);
-        rc.setCandidateId(cid);
-        roundCandidateRepository.save(rc);
+      roundCandidateRepository.deleteByRoundId(nextRound.getId());
+      int inserted = roundCandidateRepository.insertAdvancingCandidates(electionId, roundId, nextRound.getId(), advance);
+
+      if (inserted == 0) {
+        for (Long cid : advancing) {
+          RoundCandidate rc = new RoundCandidate();
+          rc.setRound(nextRound);
+          rc.setCandidateId(cid);
+          roundCandidateRepository.save(rc);
+        }
       }
-      boolean nextRoundStarted = nextRound.getStartTime() == null || !LocalDateTime.now().isBefore(nextRound.getStartTime());
-      nextRound.setStatus(nextRoundStarted ? "OPEN" : "UPCOMING");
+
+      LocalDateTime now = LocalDateTime.now();
+      boolean nextRoundStarted = nextRound.getStartTime() == null || !now.isBefore(nextRound.getStartTime());
+      boolean nextRoundEnded = nextRound.getEndTime() != null && now.isAfter(nextRound.getEndTime());
+
+      if (nextRoundEnded) {
+        nextRound.setStatus("CLOSED");
+      } else {
+        nextRound.setStatus(nextRoundStarted ? "OPEN" : "UPCOMING");
+      }
+      
       roundRepository.save(nextRound);
-      if (nextRoundStarted) {
+
+      if (nextRoundStarted && !nextRoundEnded) {
         try {
           participantInviteService.sendRoundInvitations(electionId, nextRound.getRoundNumber());
+          realtimeNotificationService.roundOpened(nextRound);
         } catch (Exception inviteEx) {
-          throw new RuntimeException("Da mo vong tiep theo nhung khong gui duoc email moi: " + inviteEx.getMessage(), inviteEx);
+          log.error("Cảnh báo: Đã mở vòng tiếp theo nhưng không gửi được email mời: {}", inviteEx.getMessage());
         }
       }
     } else {
@@ -157,21 +235,28 @@ public class ElectionService {
       }
       parentElection.setStatus("CLOSED");
       electionRepository.save(parentElection);
-      synchronizeVoteCounts(electionId);
+      try { realtimeNotificationService.electionClosed(parentElection); } catch (Exception ex) {
+          log.error("Cảnh báo: Không gửi được thông báo đóng bầu cử {}: {}", electionId, ex.getMessage());
+      }
+      try { synchronizeVoteCounts(electionId); } catch (Exception ex) {
+          log.error("Cảnh báo: Lỗi đồng bộ phiếu bầu {}: {}", electionId, ex.getMessage());
+      }
     }
   }
 
   @Transactional
   public void determineElectionWinner(Long electionId) {
     Election election = electionRepository.findById(electionId)
-            .orElseThrow(() -> new RuntimeException("Election not found"));
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử."));
 
     ElectionRound round = roundRepository.findByElectionIdAndRoundNumber(electionId, election.getTotalRounds())
-            .orElseThrow(() -> new RuntimeException("Final round not found"));
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy vòng cuối của cuộc bầu cử."));
 
     List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, round.getId());
     if (!stats.isEmpty()) {
-      Long winnerId = ((Number) stats.get(0).get("candidateId")).longValue();
+      Object cidObj = stats.get(0).get("candidateId");
+      if (cidObj == null) return;
+      Long winnerId = ((Number) cidObj).longValue();
       election.setWinnerId(winnerId);
       electionRepository.save(election);
     }
@@ -180,35 +265,43 @@ public class ElectionService {
   @Transactional
   public void synchronizeVoteCounts(Long electionId) {
     List<ElectionRound> rounds = roundRepository.findByElectionId(electionId);
-    Map<Long, Long> totalVoteCounts = new HashMap<>();
 
-    for (ElectionRound round : rounds) {
-      if (!"CANCELLED".equals(round.getStatus())) {
-        List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, round.getId());
-        for (Map<String, Object> stat : stats) {
-          Long candidateId = ((Number) stat.get("candidateId")).longValue();
-          Long voteCount = ((Number) stat.get("voteCount")).longValue();
-          totalVoteCounts.merge(candidateId, voteCount, Long::sum);
-        }
-      }
+    ElectionRound lastRound = rounds.stream()
+        .filter(r -> "CLOSED".equals(r.getStatus()) || "OPEN".equals(r.getStatus()))
+        .max(Comparator.comparing(ElectionRound::getRoundNumber))
+        .orElse(null);
+
+    if (lastRound == null) return;
+
+    // Reset tất cả ứng viên của election về 0 trước — tránh giữ voteCount cũ từ vòng trước
+    List<Candidate> allCandidates = candidateRepository.findByElectionId(electionId);
+    for (Candidate c : allCandidates) c.setVoteCount(0);
+    candidateRepository.saveAll(allCandidates);
+
+    Map<Long, Long> voteCounts = new HashMap<>();
+    List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, lastRound.getId());
+    for (Map<String, Object> stat : stats) {
+      Long candidateId = ((Number) stat.get("candidateId")).longValue();
+      Long voteCount = ((Number) stat.get("voteCount")).longValue();
+      voteCounts.put(candidateId, voteCount);
     }
 
-    List<Candidate> candidatesToUpdate = candidateRepository.findAllById(totalVoteCounts.keySet());
+    List<Candidate> candidatesToUpdate = candidateRepository.findAllById(voteCounts.keySet());
     for (Candidate candidate : candidatesToUpdate) {
-      candidate.setVoteCount(totalVoteCounts.get(candidate.getId()).intValue());
+      candidate.setVoteCount(voteCounts.get(candidate.getId()).intValue());
     }
     candidateRepository.saveAll(candidatesToUpdate);
   }
 
   public List<CandidateResponse> getElectionResults(Long electionId) {
     Election election = electionRepository.findById(electionId)
-            .orElseThrow(() -> new RuntimeException("Election not found"));
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử."));
 
     List<ElectionRound> rounds = roundRepository.findByElectionId(electionId);
     ElectionRound finalValidRound = rounds.stream()
             .filter(r -> "CLOSED".equals(r.getStatus()) || "OPEN".equals(r.getStatus()))
             .max(java.util.Comparator.comparing(ElectionRound::getRoundNumber))
-            .orElseThrow(() -> new RuntimeException("No valid round found"));
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy vòng bầu cử hợp lệ."));
 
     List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(electionId, finalValidRound.getId());
     Map<Long, Long> voteCounts = stats.stream()
@@ -223,6 +316,7 @@ public class ElectionService {
             .map(c -> CandidateResponse.builder()
                     .id(c.getId())
                     .name(c.getName())
+                    .party(c.getParty())
                     .description(c.getDescription())
                     .imageUrl(c.getImageUrl())
                     .electionId(electionId)
@@ -244,7 +338,6 @@ public class ElectionService {
     election.setTitle(request.getTitle());
     election.setDescription(request.getDescription());
     election.setTotalRounds(request.getTotalRounds());
-    configureElectionAudience(election, request);
     validateRoundAdvancement(request);
 
     String electionRawBase64 = request.getBase64Image();
@@ -253,9 +346,11 @@ public class ElectionService {
         String cleanBase64 = electionRawBase64.contains(",") ? electionRawBase64.split(",")[1] : electionRawBase64;
         byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64.trim().replaceAll("\\s+", ""));
         java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
-        election.setImageUrl((String) uploadResult.get("url"));
+        String imageUrl = (String) uploadResult.get("secure_url");
+        if (imageUrl == null) imageUrl = (String) uploadResult.get("url");
+        election.setImageUrl(imageUrl);
       } catch (Exception e) {
-        System.err.println("Lỗi upload ảnh cuộc bầu cử: " + e.getMessage());
+        throw new RuntimeException("Không thể upload ảnh cuộc bầu cử lên Cloudinary: " + e.getMessage(), e);
       }
     }
 
@@ -275,9 +370,11 @@ public class ElectionService {
                     String cleanBase64Data = rawBase64.contains(",") ? rawBase64.split(",")[1] : rawBase64;
                     byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64Data.trim().replaceAll("\\s+", ""));
                     java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
-                    candidateToUpdate.setImageUrl((String) uploadResult.get("url"));
+                    String candImageUrl = (String) uploadResult.get("secure_url");
+                    if (candImageUrl == null) candImageUrl = (String) uploadResult.get("url");
+                    candidateToUpdate.setImageUrl(candImageUrl);
                 } catch (Exception e) {
-                    System.err.println("Lỗi upload ảnh ứng viên: " + e.getMessage());
+                    throw new RuntimeException("Không thể upload ảnh ứng viên lên Cloudinary: " + e.getMessage(), e);
                 }
             }
             candidateRepository.save(candidateToUpdate);
@@ -345,11 +442,14 @@ public class ElectionService {
                                 String cleanBase64Data = rawBase64.contains(",") ? rawBase64.split(",")[1] : rawBase64;
                                 byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64Data.trim().replaceAll("\\s+", ""));
                                 java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
-                                newCand.setImageUrl((String) uploadResult.get("url"));
+                                String newCandUrl = (String) uploadResult.get("secure_url");
+                                if (newCandUrl == null) newCandUrl = (String) uploadResult.get("url");
+                                newCand.setImageUrl(newCandUrl);
                             } catch (Exception e) {
-                                System.err.println("Lỗi upload ảnh ứng viên: " + e.getMessage());
-                                newCand.setImageUrl("");
+                                throw new RuntimeException("Không thể upload ảnh ứng viên lên Cloudinary: " + e.getMessage(), e);
                             }
+                        } else if (newCandDto.getImageUrl() != null && !newCandDto.getImageUrl().trim().isEmpty()) {
+                            newCand.setImageUrl(newCandDto.getImageUrl());
                         } else {
                             newCand.setImageUrl("");
                         }
@@ -366,9 +466,7 @@ public class ElectionService {
         }
     }
     
-    Election savedElection = electionRepository.save(election);
-    assignEligibleVoters(savedElection);
-    return savedElection;
+    return electionRepository.save(election);
   }
 
   @Transactional
@@ -386,12 +484,18 @@ public class ElectionService {
       throw new RuntimeException("Xác thực thất bại! Chữ ký phiếu bầu không hợp lệ hoặc đã bị chỉnh sửa cấu trúc.");
     }
 
-    Optional<Candidate> candidateOpt = candidateRepository.findById(request.getCandidateId());
-    if (candidateOpt.isPresent()) {
-      Candidate candidate = candidateOpt.get();
-      candidate.setVoteCount(candidate.getVoteCount() + 1);
-      candidateRepository.save(candidate);
+    boolean isEncrypted = request.getEncryptedVote() != null && !request.getEncryptedVote().isBlank();
+
+    if (!isEncrypted) {
+      // Chế độ cũ: candidateId rõ ràng → cập nhật vote count ngay
+      Optional<Candidate> candidateOpt = candidateRepository.findById(request.getCandidateId());
+      if (candidateOpt.isPresent()) {
+        Candidate candidate = candidateOpt.get();
+        candidate.setVoteCount(candidate.getVoteCount() + 1);
+        candidateRepository.save(candidate);
+      }
     }
+    // Chế độ mã hóa: candidateId = null, chỉ đếm được sau khi giải mã
 
     UsedToken usedToken = new UsedToken();
     usedToken.setMessageToken(request.getMessageToken());
@@ -401,20 +505,35 @@ public class ElectionService {
     Vote vote = new Vote();
     vote.setElectionId(request.getElectionId());
     vote.setRoundId(request.getRoundId());
-    vote.setCandidateId(request.getCandidateId());
     vote.setMessageToken(request.getMessageToken());
     vote.setSignature(request.getSignature());
+
+    if (isEncrypted) {
+      // Phiếu mã hóa: candidateId = null, lưu ciphertext
+      vote.setCandidateId(null);
+      vote.setEncryptedVote(request.getEncryptedVote());
+    } else {
+      vote.setCandidateId(request.getCandidateId());
+      vote.setEncryptedVote(null);
+    }
     voteRepository.save(vote);
 
-    System.out.println(">>> [VOTE SUCCESS] Một lá phiếu nặc danh hợp lệ vừa được chấp thuận thành công vào hòm phiếu.");
+    // Broadcast vote counts ngay lập tức sau khi vote được lưu
+    try {
+      List<Map<String, Object>> stats = voteRepository.countVotesByCandidate(
+          request.getElectionId(), request.getRoundId());
+      realtimeNotificationService.voteCountUpdated(
+          request.getElectionId(), request.getRoundId(), stats);
+    } catch (Exception e) {
+      log.error("[VoteCountUpdate] Không gửi được realtime update: {}", e.getMessage());
+    }
   }
 
   @Transactional
   public void deleteElection(Long id) {
     Election election = electionRepository.findById(id)
         .orElseThrow(() -> new RuntimeException("Không tìm thấy cuộc bầu cử"));
-    election.setIsDelete(2);
-    electionRepository.save(election);
+    electionRepository.delete(election);
   }
 
   @Transactional
@@ -438,20 +557,18 @@ public class ElectionService {
 
   @Transactional
   public Election createMultiRoundElectionWithCandidates(CreateElectionRequest request) {
+    return createMultiRoundElectionWithCandidates(request, null);
+  }
+
+  public Election createMultiRoundElectionWithCandidates(CreateElectionRequest request, Long creatorId) {
     Election election = new Election();
     election.setTitle(request.getTitle());
     election.setDescription(request.getDescription());
     election.setTotalRounds(request.getTotalRounds());
     election.setIsDelete(1);
-    configureElectionAudience(election, request);
+    election.setRoleId(creatorId);
 
-    // E2EV: Tạo khóa ElGamal cho cuộc bầu cử
     validateRoundAdvancement(request);
-    HomomorphicEncryptionService.ElGamalKeyPair keyPair = encryptionService.generateKeyPair(1024);
-    election.setElGamalP(keyPair.p.toString(16));
-    election.setElGamalG(keyPair.g.toString(16));
-    election.setElGamalH(keyPair.h.toString(16));
-    election.setElGamalX(keyPair.x.toString(16));
 
     String electionRawBase64 = request.getBase64Image();
     if (electionRawBase64 != null && !electionRawBase64.trim().isEmpty()) {
@@ -459,11 +576,14 @@ public class ElectionService {
         String cleanBase64 = electionRawBase64.contains(",") ? electionRawBase64.split(",")[1] : electionRawBase64;
         byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64.trim().replaceAll("\\s+", ""));
         java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
-        election.setImageUrl((String) uploadResult.get("url"));
+        String elecImageUrl = (String) uploadResult.get("secure_url");
+        if (elecImageUrl == null) elecImageUrl = (String) uploadResult.get("url");
+        election.setImageUrl(elecImageUrl);
       } catch (Exception e) {
-        System.err.println("Lỗi upload ảnh cuộc bầu cử: " + e.getMessage());
-        election.setImageUrl("");
+        throw new RuntimeException("Không thể upload ảnh cuộc bầu cử lên Cloudinary: " + e.getMessage(), e);
       }
+    } else if (request.getImageUrl() != null && !request.getImageUrl().trim().isEmpty()) {
+      election.setImageUrl(request.getImageUrl());
     } else {
       election.setImageUrl("");
     }
@@ -479,13 +599,6 @@ public class ElectionService {
     }
 
     final Election savedElection = electionRepository.save(election);
-    // E2EV: Lưu Public Key lên Bulletin Board
-    PublicBulletinBoard pbb = new PublicBulletinBoard();
-    pbb.setElectionId(savedElection.getId());
-    pbb.setEventType("ELECTION_CREATED_PUBLIC_KEY");
-    pbb.setPayload("{\"p\":\"" + keyPair.p.toString(16) + "\",\"g\":\"" + keyPair.g.toString(16) + "\",\"h\":\"" + keyPair.h.toString(16) + "\"}");
-    publicBulletinBoardRepository.save(pbb);
-
     if (request.getRoundsTimeSettings() != null) {
       for (CreateElectionRequest.RoundTimeSettingDto roundSetting : request.getRoundsTimeSettings()) {
         ElectionRound round = new ElectionRound();
@@ -524,11 +637,14 @@ public class ElectionService {
                       String cleanBase64Data = rawBase64.contains(",") ? rawBase64.split(",")[1] : rawBase64;
                       byte[] imageBytes = java.util.Base64.getDecoder().decode(cleanBase64Data.trim().replaceAll("\\s+", ""));
                       java.util.Map uploadResult = cloudinary.uploader().upload(imageBytes, com.cloudinary.utils.ObjectUtils.emptyMap());
-                      newCand.setImageUrl((String) uploadResult.get("url"));
+                      String newCandUrl2 = (String) uploadResult.get("secure_url");
+                      if (newCandUrl2 == null) newCandUrl2 = (String) uploadResult.get("url");
+                      newCand.setImageUrl(newCandUrl2);
                   } catch (Exception e) {
-                      System.err.println("Lỗi upload ảnh ứng viên: " + e.getMessage());
-                      newCand.setImageUrl("");
+                      throw new RuntimeException("Không thể upload ảnh ứng viên lên Cloudinary: " + e.getMessage(), e);
                   }
+              } else if (newCandDto.getImageUrl() != null && !newCandDto.getImageUrl().trim().isEmpty()) {
+                  newCand.setImageUrl(newCandDto.getImageUrl());
               } else {
                   newCand.setImageUrl("");
               }
@@ -559,11 +675,11 @@ public class ElectionService {
     }
 
     if (totalCandidates < 2) {
-      throw new IllegalArgumentException("Tong so ung vien vong 1 phai tu 2 nguoi tro len.");
+      throw new IllegalArgumentException("Tổng số ứng viên vòng 1 phải từ 2 người trở lên.");
     }
 
     if (request.getTotalRounds() == null || request.getTotalRounds() < 1) {
-      throw new IllegalArgumentException("So vong bau cu khong hop le.");
+      throw new IllegalArgumentException("Số vòng bầu cử không hợp lệ.");
     }
 
     if (request.getRoundsTimeSettings() == null || request.getRoundsTimeSettings().isEmpty()) {
@@ -582,59 +698,24 @@ public class ElectionService {
 
       if (availableCandidates <= 1) {
         throw new IllegalArgumentException(
-            "Vong " + roundNumber + " chi con " + availableCandidates + " ung vien, khong the tao them vong tiep theo.");
+            "Vòng " + roundNumber + " chỉ còn " + availableCandidates + " ứng viên, không thể tạo thêm vòng tiếp theo.");
       }
 
       Integer maxAdvanceCount = roundSetting.getMaxAdvanceCount();
       if (maxAdvanceCount == null || maxAdvanceCount < 1) {
         throw new IllegalArgumentException(
-            "So ung vien lot vao Vong " + (roundNumber + 1) + " phai lon hon 0.");
+            "Số ứng viên lọt vào Vòng " + (roundNumber + 1) + " phải lớn hơn 0.");
       }
 
       if (maxAdvanceCount >= availableCandidates) {
         throw new IllegalArgumentException(
-            "Vong " + roundNumber + " dang co " + availableCandidates
-                + " ung vien, so ung vien lot vao Vong " + (roundNumber + 1)
-                + " bat buoc phai nho hon " + availableCandidates + ".");
+            "Vòng " + roundNumber + " đang có " + availableCandidates
+                + " ứng viên, số ứng viên lọt vào Vòng " + (roundNumber + 1)
+                + " bắt buộc phải nhỏ hơn " + availableCandidates + ".");
       }
 
       availableCandidates = maxAdvanceCount;
     }
-  }
-
-  private void configureElectionAudience(Election election, CreateElectionRequest request) {
-    if ("DEPARTMENT_SPECIFIC".equalsIgnoreCase(request.getAudienceType())) {
-      if (request.getDepartmentIds() == null || request.getDepartmentIds().isEmpty()) {
-        throw new RuntimeException("Vui long chon it nhat mot phong ban duoc tham gia bau cu.");
-      }
-
-      List<Department> departments = departmentRepository.findAllById(request.getDepartmentIds());
-      if (departments.size() != request.getDepartmentIds().size()) {
-        throw new RuntimeException("Danh sach phong ban tham gia bau cu khong hop le.");
-      }
-
-      election.setAudienceType(Election.AudienceType.DEPARTMENT_SPECIFIC);
-      election.setTargetDepartments(new java.util.HashSet<>(departments));
-      return;
-    }
-
-    election.setAudienceType(Election.AudienceType.COMPANY_WIDE);
-    election.getTargetDepartments().clear();
-  }
-
-  private void assignEligibleVoters(Election election) {
-    electionVoterRepository.deleteByElectionId(election.getId());
-    if (Election.AudienceType.DEPARTMENT_SPECIFIC.equals(election.getAudienceType())) {
-      List<Long> departmentIds = election.getTargetDepartments().stream()
-          .map(Department::getId)
-          .collect(Collectors.toList());
-      if (!departmentIds.isEmpty()) {
-        electionVoterRepository.insertDepartmentEligibleVoters(election.getId(), departmentIds);
-      }
-      return;
-    }
-
-    electionVoterRepository.insertCompanyWideEligibleVoters(election.getId());
   }
 
   @Transactional(readOnly = true)

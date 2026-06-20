@@ -20,6 +20,11 @@ public class JwtUtil {
         return extractClaim(token, Claims::getSubject);
     }
 
+    public String extractRoles(String token) {
+        Object roles = extractAllClaims(token).get("role");
+        return roles != null ? roles.toString() : "";
+    }
+
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }

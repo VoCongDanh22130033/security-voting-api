@@ -4,27 +4,24 @@ import com.nlu.authservice.dto.CreateModeratorRequest;
 import com.nlu.authservice.dto.LoginRequest;
 import com.nlu.authservice.dto.LoginResponse;
 import com.nlu.authservice.dto.RegisterRequest;
-import com.nlu.authservice.entity.Employee;
 import com.nlu.authservice.entity.Role;
 import com.nlu.authservice.entity.User;
-import com.nlu.authservice.entity.VerificationToken;
-import com.nlu.authservice.entity.Voter;
-import com.nlu.authservice.repository.EmployeeRepository;
 import com.nlu.authservice.repository.RoleRepository;
 import com.nlu.authservice.repository.UserRepository;
-import com.nlu.authservice.repository.VerificationTokenRepository;
-import com.nlu.authservice.repository.VoterRepository;
-import java.time.LocalDateTime;
-import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import java.util.Set;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class AuthService {
 
@@ -38,81 +35,33 @@ public class AuthService {
   private PasswordEncoder passwordEncoder;
 
   @Autowired
-  private VoterRepository voterRepository;
-
-  @Autowired
-  private VerificationTokenRepository tokenRepository;
-
-  @Autowired
   private JavaMailSender mailSender;
 
   @Autowired
-  private EmployeeRepository employeeRepository;
+  private RedisOtpService redisOtpService;
+
+  @Value("${app.frontend-url:http://localhost:5173}")
+  private String frontendUrl;
 
   @Transactional
   public String register(RegisterRequest request) {
-    // 1. Kiểm tra email tồn tại trong bảng users
-    if (userRepository.existsByEmail(request.getEmail())) {
-      throw new RuntimeException("Lỗi: Email đã được sử dụng cho một tài khoản khác!");
-    }
-
-    // 2. Kiểm tra email có trong danh sách nhân viên hợp lệ (employees) không
-    Optional<Employee> employeeOpt = employeeRepository.findByEmail(request.getEmail());
-    if (employeeOpt.isEmpty()) {
-      throw new RuntimeException("Lỗi: Email không nằm trong danh sách nhân sự được cấp phép tham gia hệ thống.");
-    }
-
-    Employee employee = employeeOpt.get();
-    if (!employee.isActive()) {
-      throw new RuntimeException("Lỗi: Tài khoản nhân sự này đã bị vô hiệu hóa.");
-    }
-
-    // 3. Tạo User mới và liên kết với Employee
-    User user = new User();
-    user.setFullName(request.getFullName() != null && !request.getFullName().isEmpty() ? request.getFullName() : employee.getFullName());
-    user.setPassword(passwordEncoder.encode(request.getPassword()));
-    user.setEmail(request.getEmail());
-    user.setPhone(request.getPhone());
-    user.setVerified(false);
-    user.setEmployee(employee); // Liên kết User -> Employee
-    User savedUser = userRepository.save(user);
-
-    // 4. Tạo Voter
-    Voter voter = new Voter();
-    voter.setUser(savedUser);
-    voter.setFullName(savedUser.getFullName());
-    voter.setVerified(false);
-    voterRepository.save(voter);
-
-    // 5. Gán quyền ROLE_VOTER
-    Role role = roleRepository.findByName("ROLE_VOTER")
-        .orElseThrow(() -> new RuntimeException("Lỗi: Không tìm thấy ROLE_VOTER."));
-    user.setRoles(Set.of(role));
-
-    // 6. Tạo Token và Gửi Email xác thực
-    try {
-      sendVerificationEmail(savedUser);
-    } catch (Exception e) {
-      System.out.println("Lỗi gửi mail: " + e.getMessage());
-    }
-
-    return "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.";
+    throw new RuntimeException("Hệ thống không còn hỗ trợ đăng ký tài khoản cử tri. Vui lòng tham gia bầu cử bằng link mời trong email.");
   }
 
   public User loginReturnUser(LoginRequest request) {
-    System.out.println("Đăng nhập với email: [" + request.getEmail() + "]");
+    log.info("Dang nhap voi email: [{}]", request.getEmail());
 
     User user = userRepository.findByEmail(request.getEmail().trim())
         .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
     if (user.getIsLock() != null && user.getIsLock() == 1) {
-      throw new RuntimeException("Tài khoản của bạn đã bị khóa bởi ban quản trị hệ thống!");
+      throw new RuntimeException("Tài khoản của bản đã bị khóa bởi quản trị viên hệ thống!");
     }
 
     boolean isVoterOnly = user.getRoles() != null
         && user.getRoles().stream().anyMatch(role -> "ROLE_VOTER".equals(role.getName()))
         && user.getRoles().stream().noneMatch(role -> "ROLE_ADMIN".equals(role.getName()) || "ROLE_ORGANIZER".equals(role.getName()));
     if (isVoterOnly) {
-      throw new RuntimeException("Tai khoan cu tri khong dang nhap bang mat khau. Vui long tham gia bau cu bang link moi trong email.");
+      throw new RuntimeException("Tài khoản cử tri không đăng nhập bằng mật khẩu. Vui lòng tham gia bầu cử bằng link mời trong email.");
     }
 
     return user;
@@ -128,7 +77,6 @@ public class AuthService {
         .map(Role::getName)
         .collect(java.util.stream.Collectors.toSet());
 
-
     return new LoginResponse(
         token,
         user.getFullName(),
@@ -139,30 +87,30 @@ public class AuthService {
     );
   }
 
-  // gửi mã xác thực
   public void sendVerificationEmail(User user) {
-    String token = String.valueOf(new Random().nextInt(899999) + 100000);
-    VerificationToken vToken = new VerificationToken(user, token);
-    tokenRepository.save(vToken);
+    String otp = String.valueOf(new Random().nextInt(899999) + 100000);
+    redisOtpService.saveOtp(user.getEmail(), otp);
     SimpleMailMessage message = new SimpleMailMessage();
     message.setTo(user.getEmail());
     message.setSubject("Xác thực tài khoản E-Voting");
-    message.setText("Mã xác thực của bạn là: " + token);
+    message.setText("Mã xác thực của bạn là: " + otp);
     mailSender.send(message);
   }
 
-  public boolean verifyEmail(String token) {
-    VerificationToken vToken = tokenRepository.findByToken(token)
-        .orElseThrow(() -> new RuntimeException("Mã không hợp lệ"));
-
-    if (vToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-      throw new RuntimeException("Mã đã hết hạn");
+  @Transactional
+  public boolean verifyEmail(String token, String email) {
+    String stored = redisOtpService.getOtp(email);
+    if (stored == null) {
+      throw new RuntimeException("Mã đã hết hạn.");
     }
-
-    User user = vToken.getUser();
+    if (!stored.equals(token)) {
+      throw new RuntimeException("Mã không hợp lệ.");
+    }
+    User user = userRepository.findByEmail(email)
+        .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại."));
     user.setVerified(true);
     userRepository.save(user);
-    tokenRepository.delete(vToken);
+    redisOtpService.deleteOtp(email);
     return true;
   }
 
@@ -181,11 +129,61 @@ public class AuthService {
     user.setPhone(request.getPhone());
     user.setVerified(true);
     user.setIsLock(0);
-
     user.setRoles(Set.of(moderatorRole));
 
     userRepository.save(user);
+    sendOrganizerWelcomeEmail(request.getEmail(), request.getFullName(), request.getPassword());
 
     return "Tạo tài khoản chủ trì bầu cử thành công! Email: " + request.getEmail();
+  }
+
+  private void sendOrganizerWelcomeEmail(String email, String fullName, String rawPassword) {
+    try {
+      MimeMessage message = mailSender.createMimeMessage();
+      MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+      helper.setTo(email);
+      helper.setSubject("Bạn đã được bổ nhiệm làm Chủ trì Bầu cử – E-Voting");
+      String loginUrl = frontendUrl + "/login";
+      String html = """
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+            <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:32px 24px;text-align:center">
+              <h1 style="color:#fff;margin:0;font-size:22px">🗳️ E-Voting System</h1>
+              <p style="color:#bfdbfe;margin:8px 0 0">Hệ thống Bầu cử Điện tử Bảo mật</p>
+            </div>
+            <div style="padding:32px 24px">
+              <p style="color:#0f172a;font-size:16px">Xin chào <strong>%s</strong>,</p>
+              <p style="color:#475569">Quản trị viên hệ thống đã bổ nhiệm bạn làm <strong style="color:#2563eb">Chủ trì Bầu cử</strong>. Dưới đây là thông tin đăng nhập của bạn:</p>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0">
+                <table style="width:100%%">
+                  <tr>
+                    <td style="color:#64748b;padding:6px 0;width:120px">Email:</td>
+                    <td style="color:#0f172a;font-weight:600">%s</td>
+                  </tr>
+                  <tr>
+                    <td style="color:#64748b;padding:6px 0">Mật khẩu:</td>
+                    <td style="color:#0f172a;font-weight:600;font-family:monospace">%s</td>
+                  </tr>
+                </table>
+              </div>
+              <p style="color:#dc2626;font-size:13px">⚠️ Vui lòng đổi mật khẩu sau lần đăng nhập đầu tiên để bảo mật tài khoản.</p>
+              <p style="color:#475569">Với tư cách Chủ trì, bạn có thể tạo và quản lý các cuộc bầu cử, thêm ứng viên và theo dõi kết quả trực tiếp trên hệ thống.</p>
+              <div style="text-align:center;margin:28px 0">
+                <a href="%s" style="display:inline-block;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.3px">
+                  🔐 Đăng nhập ngay
+                </a>
+              </div>
+              <p style="color:#94a3b8;font-size:12px;text-align:center">Hoặc truy cập: <a href="%s" style="color:#2563eb">%s</a></p>
+            </div>
+            <div style="background:#f1f5f9;padding:16px 24px;text-align:center">
+              <p style="color:#94a3b8;font-size:12px;margin:0">© E-Voting System – Email này được gửi tự động, vui lòng không trả lời.</p>
+            </div>
+          </div>
+          """.formatted(fullName, email, rawPassword, loginUrl, loginUrl, loginUrl);
+      helper.setText(html, true);
+      mailSender.send(message);
+      log.info("Đã gửi email bổ nhiệm chủ trì tới: {}", email);
+    } catch (Exception e) {
+      log.error("Không thể gửi email bổ nhiệm tới {}: {}", email, e.getMessage());
+    }
   }
 }

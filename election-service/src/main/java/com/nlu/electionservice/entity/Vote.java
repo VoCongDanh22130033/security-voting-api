@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "votes")
@@ -23,7 +22,8 @@ public class Vote {
   @Column(name = "round_id", nullable = false)
   private Long roundId;
 
-  @Column(name = "candidate_id", nullable = false)
+  // NULL khi phiếu được mã hóa — chỉ có giá trị sau khi giải mã
+  @Column(name = "candidate_id")
   private Long candidateId;
 
   @Column(name = "message_token", columnDefinition = "TEXT", nullable = false)
@@ -32,6 +32,7 @@ public class Vote {
   @Column(name = "signature", columnDefinition = "TEXT", nullable = false)
   private String signature;
 
-  @Column(name = "created_at", insertable = false, updatable = false)
-  private LocalDateTime createdAt;
+  // RSA-OAEP mã hóa JSON {"candidateId":X,"nonce":"uuid"} — server không biết nội dung
+  @Column(name = "encrypted_vote", columnDefinition = "LONGTEXT")
+  private String encryptedVote;
 }

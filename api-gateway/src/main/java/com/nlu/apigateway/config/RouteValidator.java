@@ -13,8 +13,19 @@ public class RouteValidator {
             "/auth/register",
             "/auth/login",
             "/auth/verify-email",
-            "/api/elections",
+            "/voter/forgot-password",
+            "/voter/verify-otp",
+            "/voter/reset-password-otp",
+            "/api/elections/invites/verify",
+            "/api/elections/my-elections",
             "/api/v1/votes/cast-e2e",
+            "/notification/ws-notifications",
+            "/notification/ws-notifications-native",
+            "/api/crypto/public-key",
+            "/api/crypto/vote-encryption-key",
+            "/api/crypto/sign",
+            "/api/v1/votes/submit-anonymous",
+            "/api/v1/votes/count",
             "/eureka"
     );
 

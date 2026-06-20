@@ -7,4 +7,5 @@ public class BlindRequest {
   private Long electionId;
   private Long roundId;
   private Long voterId;
+  private String inviteToken;
 }
